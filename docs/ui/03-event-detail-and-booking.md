@@ -42,7 +42,7 @@ Mục tiêu: một trang trả lời đủ "event này là gì, còn vé không,
 |---|---|
 | `event.id` | dùng làm `{eventId}` khi giữ chỗ; **không** dùng slug trong đường dẫn reservation |
 | `event.status` | `PUBLISHED` → cho giữ chỗ; `CANCELLED` → banner đỏ + panel disabled; khác → coi như not found |
-| `availability[]` | nguồn duy nhất của tên loại vé, giá, số còn và `sales_open` |
+| `availability[]` | nguồn duy nhất của tên loại vé, giá, số còn, `sales_open`, `sales_start`/`sales_end` và `status` loại vé |
 | `organization` | khu "Ban tổ chức"; lỗi → hiện "Thông tin ban tổ chức tạm không tải được" |
 | Refresh | refetch khi tab quay lại focus và dữ liệu cũ hơn 15 giây; giữ nguyên `cart` đã chọn |
 
@@ -75,7 +75,7 @@ bấm Giữ chỗ
 | Kết quả | Hành động UI |
 |---|---|
 | A: `{registration_id, tickets[]}` | Panel đổi sang **Success**: danh sách vé (`code`, tên loại vé), nút "Xem vé của tôi" → `/me/tickets`, "Tải vé" (in/PDF trình duyệt). Không còn countdown. |
-| B: `{reservation_id, status:"HELD", expires_at, total_amount}` | Panel đổi sang **Chờ thanh toán**: "Chúng tôi đang xử lý giao dịch mock…" + countdown từ `expires_at` + bắt đầu poll §5. Nút phụ "Hủy giữ chỗ" → `DELETE /api/reservations/{id}` |
+| B: `{reservation_id, status:"HELD", expires_at, total_amount, currency}` | Panel đổi sang **Chờ thanh toán**: "Chúng tôi đang xử lý giao dịch mock…" + countdown từ `expires_at` + bắt đầu poll §5. Nút phụ "Hủy giữ chỗ" → `DELETE /api/reservations/{id}`. Định dạng tiền dùng `currency` từ response, không hardcode VND |
 | `409 SOLD_OUT` | toast + banner đỏ trong panel, refetch composition để cập nhật `available`, reset `cart` về qty không vượt số còn |
 | `409 SALES_CLOSED` | panel về trạng thái "đã đóng bán" (§3), không retry |
 | `400 VALIDATION_FAILED` | báo trong panel, không tự retry |

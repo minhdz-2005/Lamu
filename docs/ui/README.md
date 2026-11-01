@@ -25,6 +25,6 @@ Mỗi file tự chứa đủ thông tin để làm mà không phải đọc file
 | `/events` | `GET /public/events` |
 | `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}` |
 | `/me/tickets` | `GET /users/me`, `GET /users/me/tickets` |
-| `/organizer` | `GET /users/me`, `POST /organizations`, `GET /organizations/{orgId}`, `POST /events`, `POST /events/{id}/publish`, `POST /events/{id}/cancel`, `GET /organizations/{orgId}/events`, `POST /events/{id}/ticket-types`, `GET /events/{id}/availability`, `GET /events/{id}/tickets`, `POST /tickets/check-in` |
+| `/organizer` | `GET /users/me`, `POST /organizations`, `POST /events`, `GET /organizations/{orgId}/events`, `POST /events/{id}/publish`, `POST /events/{id}/cancel`, `POST /events/{id}/ticket-types`, `GET /events/{id}/availability`, `GET /events/{id}/tickets`, `POST /tickets/check-in` |
 
 Không có màn hình nào gọi Payment: ở MUST, Payment chỉ tiêu `ReservationCreated` từ broker và frontend biết kết quả qua `GET /reservations/{id}`.

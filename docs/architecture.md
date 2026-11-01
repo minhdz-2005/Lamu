@@ -96,7 +96,7 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 
 | Bảng | Cột chính |
 |---|---|
-| `events` | `id UUID PK`, `organization_id UUID`, `created_by UUID`, `title TEXT`, `slug TEXT`, `description TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `timezone TEXT`, `venue JSONB`, `version BIGINT` |
+| `events` | `id UUID PK`, `organization_id UUID`, `created_by UUID`, `title TEXT`, `slug TEXT`, `description TEXT`, `status TEXT` (`DRAFT`/`PUBLISHED`/`CANCELLED`), `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `timezone TEXT`, `venue JSONB` key cố định `{name, address}`, `version BIGINT` |
 | `event_speakers` (STRETCH) | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, `name TEXT`, `bio TEXT`, `sort_order INT` |
 | `event_schedule_items` (STRETCH) | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
 | `event_assets` (STRETCH) | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
@@ -109,12 +109,12 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 
 | Bảng | Cột chính |
 |---|---|
-| `ticket_types` | `id UUID PK`, `event_id UUID`, `name TEXT`, `price NUMERIC(12,2)`, `currency CHAR(3)`, `capacity INT`, `sales_start/end TIMESTAMPTZ`, `status TEXT` |
+| `ticket_types` | `id UUID PK`, `event_id UUID`, `name TEXT`, `price NUMERIC(12,2)`, `currency CHAR(3)`, `capacity INT`, `sales_start/end TIMESTAMPTZ`, `status TEXT` (`ACTIVE`/`CLOSED`) |
 | `inventory` | `ticket_type_id UUID PK`, `capacity INT`, `sold INT`, `reserved INT`, `version BIGINT`, `updated_at TIMESTAMPTZ` |
 | `reservations` | `id UUID PK`, `user_id UUID`, `event_id UUID`, `status TEXT` (`HELD`/`CONFIRMED`/`RELEASED`), `payment_status TEXT NULL` (`PENDING`/`SUCCEEDED`/`FAILED`), `expires_at TIMESTAMPTZ`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ` |
 | `reservation_items` | `id UUID PK`, `reservation_id UUID`, `ticket_type_id UUID`, `quantity INT`, `unit_price NUMERIC(12,2)` |
 | `registrations` | `id UUID PK`, `reservation_id UUID`, `user_id UUID`, `status TEXT`, `registered_at TIMESTAMPTZ` |
-| `tickets` | `id UUID PK`, `registration_id UUID`, `ticket_type_id UUID`, `code TEXT UNIQUE`, `status TEXT`, `checked_in_at TIMESTAMPTZ NULL` |
+| `tickets` | `id UUID PK`, `registration_id UUID`, `ticket_type_id UUID`, `code TEXT UNIQUE`, `status TEXT` (`ISSUED`/`USED`/`VOIDED`), `checked_in_at TIMESTAMPTZ NULL` |
 | `event_snapshot` | `event_id UUID PK`, `title TEXT`, `slug TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`; cập nhật từ `EventPublished`/`EventUpdated`/`EventCancelled` |
 
 `event_id`, `user_id` là ID tham chiếu, không FK chéo. Registration không gọi REST sang Event: mọi kiểm tra "event đã publish chưa, còn trong thời gian bán không" đọc `event_snapshot` (eventual consistency, chậm nhất vài giây). Endpoint: `POST /events/{id}/ticket-types`, `GET /events/{id}/ticket-types`, `PATCH /ticket-types/{id}`, `GET /events/{id}/availability`, `POST /events/{id}/reservations` (bắt buộc `Idempotency-Key`), `GET /reservations/{id}`, `POST /reservations/{id}/confirm` (nội bộ, chỉ consumer `PaymentSucceeded` gọi; vé miễn phí đã confirm ngay trong `POST /reservations` nên không tới đây; không route qua Gateway cho user), `DELETE /reservations/{id}`, `GET /users/me/tickets`, `GET /events/{id}/tickets` (organizer, quyền `event.read`), `POST /tickets/check-in` (body `{code}`, organizer check-in theo mã vé in trên ticket; quyền `ticket.checkin`).

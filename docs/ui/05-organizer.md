@@ -1,6 +1,6 @@
 # 05. Trang organizer tối giản
 
-**Route:** `/organizer` · **Cần đăng nhập:** Bắt buộc + có membership trong tổ chức · **Ưu tiên:** 5 · **API:** `GET /api/users/me`, `POST /api/organizations`, `GET /api/organizations/{orgId}`, `POST /api/events`, `GET /api/organizations/{orgId}/events`, `POST /api/events/{id}/publish`, `POST /api/events/{id}/cancel`, `POST /api/events/{id}/ticket-types`, `GET /api/events/{id}/availability`, `GET /api/events/{id}/tickets`, `POST /api/tickets/check-in`
+**Route:** `/organizer` · **Cần đăng nhập:** Bắt buộc + có membership trong tổ chức · **Ưu tiên:** 5 · **API:** `GET /api/users/me`, `POST /api/organizations`, `POST /api/events`, `GET /api/organizations/{orgId}/events`, `POST /api/events/{id}/publish`, `POST /api/events/{id}/cancel`, `POST /api/events/{id}/ticket-types`, `GET /api/events/{id}/availability`, `GET /api/events/{id}/tickets`, `POST /api/tickets/check-in`
 
 Mục tiêu: đủ để tự chứng minh đường thẳng đứng demo — tạo event, mở bán, thêm loại vé, rồi đứng ở cửa check-in khách. Một trang, ba tab, không có sidebar quản trị.
 
@@ -10,6 +10,7 @@ Không làm ở MUST (STRETCH): sửa event đã publish, đổi giờ, quản l
 
 ```text
 GET /api/users/me -> memberships[]
+   memberships: [{organization_id, name, slug, roles[]}]   (shape chốt ở catalog §1)
   rỗng            -> Tab 0: form "Tạo tổ chức" (bắt buộc trước khi làm gì khác)
   có 1            -> auto-select org đó
   có nhiều         -> dropdown "Tổ chức" ở header trang, lưu lựa chọn vào sessionStorage
@@ -140,8 +141,8 @@ GET /api/events/{eventId}/availability
 | Capacity | `capacity` | — |
 | Đã bán / đang giữ | `sold` / `reserved` | số liệu thật, không suy đoán |
 | Còn lại | `available` | ≤ 10 → chữ đỏ |
-| Cửa bán | `sales_open` + `sales_start`/`sales_end` từ `GET /api/events/{eventId}/ticket-types` | badge "Đang mở" / "Chưa mở" / "Đã đóng" |
-| Trạng thái | `status` của ticket type | `ACTIVE` / `CLOSED` |
+| Cửa bán | `sales_open`, `sales_start`, `sales_end` nằm sẵn trong `availability` | badge "Đang mở" / "Chưa mở" / "Đã đóng" |
+| Trạng thái loại vé | `status` trong `availability` | `ACTIVE` / `CLOSED` |
 
 ### 4.2 Thêm loại vé (form inline, không modal)
 
@@ -184,7 +185,7 @@ Thành công → thêm dòng vào bảng, focus lại ô `name` của form trố
 | API | Panel | Âm thanh |
 |---|---|---|
 | `200 {status: "USED", checked_in_at}` | xanh: "Hợp lệ · <ticket_type_name> · vào lúc <checked_in_at>" | beep OK (tùy chọn, có toggle) |
-| `409 ALREADY_CHECKED_IN` | đỏ: "Mã này đã check-in lúc <thời điểm API trả hoặc tra từ bảng>" | beep lỗi |
+| `409 ALREADY_CHECKED_IN` | đỏ: in nguyên văn `message` từ API — server đã nhét timestamp lần check-in trước vào câu đó | beep lỗi |
 | `409 TICKET_VOIDED` | cam: "Vé đã hủy vì sự kiện bị hủy." | beep lỗi |
 | `404 NOT_FOUND` | đỏ: "Mã vé không tồn tại. Kiểm tra lại phím tắt Tiếng Việt." | beep lỗi |
 | `403 FORBIDDEN` | đỏ: "Bạn không có quyền check-in event này." + ẩn tab sau refetch | — |
@@ -219,7 +220,7 @@ Sau mỗi lần 200: refetch bảng vé một lần (không chờ 15 giây), scr
 | Publish xong nhưng `event_snapshot` phía Registration chưa cập nhật (eventual, vài giây) | Link `/events/{slug}` có thể 404 trong vài giây → 03 hiện ErrorState "thử lại"; tab 1 hiện note "Event vừa publish, trang công khai có thể chậm vài giây." |
 | Hai organizer cùng tạo slug giống nhau | kẻ thắng 200, kẻ thua `SLUG_TAKEN` → UI giữ form để sửa |
 | Thêm loại vé `price = 0` | badge "Miễn phí" trong bảng; khi khách mua, 03 §4 nhánh A confirm ngay — mô tả đúng trong tooltip của badge |
-| Check-in mã của event khác event đang chọn | 200 bình thường (API tra theo mã); UI thêm dòng phụ "Lưu ý: mã này thuộc event <title>" — tổ chức `event_id` từ response |
+| Check-in mã của event khác event đang chọn | 200 bình thường (API tra theo mã); UI thêm dòng phụ "Lưu ý: mã này thuộc event `event_title`" — hai field `event_id`, `event_title` có sẵn trong response check-in, không cần gọi thêm API |
 | Bảng vé lớn (> 200 dòng) | phân trang bằng `limit`/`offset` với nút "Xem tiếp", không virtualize |
 | Đang mở form loại vé thì event bị tab khác cancel | submit gặp 409/403 → refetch, đóng form, banner "Event đã bị hủy." |
 

@@ -40,7 +40,7 @@ Hiện `message` từ API nếu nó là câu tiếng Việt; nếu API chỉ tr�
 | `TIME_LOCKED` | 409 | "Đã có người giữ chỗ nên không đổi được giờ event." | Giữ field giờ disabled |
 | `EMAIL_TAKEN` | 409 | "Email này đã có tài khoản." | Báo dưới field email |
 | `SLUG_TAKEN` | 409 | "Đường dẫn (slug) này đã tồn tại." | Báo dưới field slug |
-| `ALREADY_CHECKED_IN` | 409 | "Mã vé này đã được check-in lúc <checked_in_at>." | Highlight dòng vé đã dùng |
+| `ALREADY_CHECKED_IN` | 409 | In nguyên văn `message` từ API (đã chứa timestamp RFC3339 lần check-in trước) | Highlight dòng vé đã dùng |
 | `TICKET_VOIDED` | 409 | "Vé đã bị hủy vì sự kiện bị hủy." | Banner đỏ trên dòng vé |
 | `UPSTREAM_UNAVAILABLE` | 502 | "Một phần dịch vụ đang tạm lỗi, thử lại sau ít phút." | Nút "Thử lại" |
 

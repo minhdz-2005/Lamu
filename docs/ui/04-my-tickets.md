@@ -53,7 +53,7 @@ GET /api/users/me/tickets    -> [{ticket_id, code, event_id, event_title, event_
 
 ## 3. Badge trạng thái
 
-`status` của vé và `event_status` của event quyết định nhãn; hai thông tin phải hiển thị đồng thời vì một vé `ISSUED` trong event `CANCELLED` thực chất đã vô hiệu.
+`status` của vé và `event_status` của event quyết định nhãn; hai thông tin phải hiển thị đồng thời vì một vé `ISSUED` trong event `CANCELLED` thực chất đã vô hiệu. Enum vé là `ISSUED`/`USED`/`VOIDED`, enum event là `DRAFT`/`PUBLISHED`/`CANCELLED` — nguồn định nghĩa ở §3.2/§3.3 [docs/architecture.md](../architecture.md), UI không tự thêm giá trị.
 
 | `ticket.status` | `event_status` | Nhãn | Màu | Ghi chú thêm |
 |---|---|---|---|---|
