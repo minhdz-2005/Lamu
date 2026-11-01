@@ -1,0 +1,95 @@
+name: lumasoa
+services:
+  identity-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+    volumes: [identity-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d identity_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  event-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: event_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+    volumes: [event-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d event_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  registration-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: registration_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+    volumes: [registration-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d registration_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  payment-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+    volumes: [payment-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d payment_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  notification-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+    volumes: [notification-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d notification_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-luma}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local_dev_only}
+    ports:
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+# This repository currently contains architecture/docs scaffolding, not runnable
+# application images. Add gateway and service build targets here as their
+# Dockerfiles and implementations are created. Keep their ports internal.
+networks:
+  backend:
+    driver: bridge
+volumes:
+  identity-data:
+  event-data:
+  registration-data:
+  notification-data:
+  payment-data:
+
+
