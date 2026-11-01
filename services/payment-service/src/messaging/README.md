@@ -1,4 +1,3 @@
 # Messaging layer
 
-Phát PaymentSucceeded/PaymentFailed/RefundCompleted; nhận yêu cầu thanh toán. Consumer idempotent.
-
+Tiêu `ReservationCreated` và `EventCancelled` từ broker; phát `PaymentSucceeded`, `PaymentFailed`, `RefundCompleted`. Consumer idempotent theo `message_id` và ghi vào `processed_messages`. Ở MUST, Payment không nhận lệnh thanh toán từ frontend.

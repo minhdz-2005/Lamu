@@ -4,6 +4,7 @@
 
 ## Tài liệu
 - [Kiến trúc và kế hoạch tổng thể](architecture.md)
+- [Danh mục API năm service](docs/api/catalog.md)
 - [Tài liệu dự án](docs/README.md)
 
 ## Nguyên tắc kiến trúc

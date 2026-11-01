@@ -6,7 +6,6 @@ flowchart LR
   GW --> ID[Identity & Organization]
   GW --> EV[Event Service]
   GW --> RG[Registration Service]
-  GW --> PAY[Payment Service]
   GW --> NT[Notification Service]
   ID --> IDDB[(identity_db)]
   EV --> EVDB[(event_db)]
@@ -19,7 +18,9 @@ flowchart LR
   PAY -. domain events .-> MQ
   MQ -. ReservationCreated .-> PAY
   MQ -. PaymentSucceeded / PaymentFailed .-> RG
-  MQ -. domain events .-> NT
+  MQ -. EventCancelled .-> RG
+  MQ -. EventCancelled .-> PAY
+  MQ -. RegistrationConfirmed / TicketIssued / ReservationReleased / BookingCancelled .-> NT
 ```
 
-Mỗi service chỉ ghi database riêng; các ID giữa service là tham chiếu logic. Payment nhận `ReservationCreated` và trả kết quả qua event, không ghi reservation hay ticket.
+Mỗi service chỉ ghi database riêng; các ID giữa service là tham chiếu logic. Payment không có route qua Gateway ở MUST: API của nó đều là `/internal/...`, phối hợp chỉ bằng event. Payment nhận `ReservationCreated` và trả kết quả qua event, không ghi reservation hay ticket.
