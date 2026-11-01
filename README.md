@@ -1,4 +1,4 @@
-'# LumaSOA
+# LumaSOA
 
 Đồ án nền tảng quản lý sự kiện theo SOA/Microservices: tổ chức, sự kiện, RBAC đa cấp và đăng ký vé có kiểm soát đồng thời.
 
@@ -14,6 +14,5 @@
 - Chạy hạ tầng local từ `docker-compose.yml` ở thư mục gốc.
 
 > Đây là bộ khung tài liệu và thư mục. Các service chưa có mã nguồn triển khai.
-'
 
 

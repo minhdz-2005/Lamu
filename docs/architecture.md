@@ -31,11 +31,9 @@ Các API service chỉ expose trong Docker network; Gateway là ingress public. 
 | Bảng | Cột chính |
 |---|---|
 | `users` | `id UUID PK`, `email CITEXT UNIQUE`, `display_name TEXT`, `password_hash TEXT`, `status TEXT`, `created_at TIMESTAMPTZ` |
-| `organizations` | `id UUID PK`, 
-ame TEXT`, `slug TEXT UNIQUE`, `created_by UUID` |
+| `organizations` | `id UUID PK`, `name TEXT`, `slug TEXT UNIQUE`, `created_by UUID` |
 | `memberships` | `id UUID PK`, `organization_id UUID`, `user_id UUID`, `status TEXT`, `joined_at TIMESTAMPTZ`; unique `(organization_id,user_id)` |
-| `roles` | `id UUID PK`, `organization_id UUID NULL`, `code TEXT`, 
-ame TEXT`, `scope TEXT` (`ORG`/`EVENT`) |
+| `roles` | `id UUID PK`, `organization_id UUID NULL`, `code TEXT`, `name TEXT`, `scope TEXT` (`ORG`/`EVENT`) |
 | `permissions` | `id UUID PK`, `code TEXT UNIQUE`, `description TEXT` |
 | `role_permissions` | `role_id UUID`, `permission_id UUID`, unique cặp; FK nội bộ |
 | `membership_roles` | `membership_id UUID`, `role_id UUID`, `resource_type TEXT NULL`, `resource_id UUID NULL` |
@@ -54,8 +52,7 @@ ame TEXT`, `scope TEXT` (`ORG`/`EVENT`) |
 | Bảng | Cột chính |
 |---|---|
 | `events` | `id UUID PK`, `organization_id UUID`, `created_by UUID`, `title TEXT`, `slug TEXT`, `description TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `timezone TEXT`, `venue JSONB`, `version BIGINT` |
-| `event_speakers` | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, 
-ame TEXT`, `bio TEXT`, `sort_order INT` |
+| `event_speakers` | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, `name TEXT`, `bio TEXT`, `sort_order INT` |
 | `event_schedule_items` | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
 | `event_assets` | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
 
@@ -67,8 +64,7 @@ ame TEXT`, `bio TEXT`, `sort_order INT` |
 
 | Bảng | Cột chính |
 |---|---|
-| `ticket_types` | `id UUID PK`, `event_id UUID`, 
-ame TEXT`, `price NUMERIC(12,2)`, `currency CHAR(3)`, `capacity INT`, `sales_start/end TIMESTAMPTZ`, `status TEXT` |
+| `ticket_types` | `id UUID PK`, `event_id UUID`, `name TEXT`, `price NUMERIC(12,2)`, `currency CHAR(3)`, `capacity INT`, `sales_start/end TIMESTAMPTZ`, `status TEXT` |
 | `inventory` | `ticket_type_id UUID PK`, `capacity INT`, `sold INT`, `reserved INT`, `version BIGINT`, `updated_at TIMESTAMPTZ` |
 | `reservations` | `id UUID PK`, `user_id UUID`, `event_id UUID`, `status TEXT`, `expires_at TIMESTAMPTZ`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ` |
 | `reservation_items` | `id UUID PK`, `reservation_id UUID`, `ticket_type_id UUID`, `quantity INT`, `unit_price NUMERIC(12,2)` |
