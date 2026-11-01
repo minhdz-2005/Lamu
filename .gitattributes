@@ -1,0 +1,2 @@
+# LF thống nhất trong repository và working tree (tránh cảnh báo CRLF trên Windows).
+* text=auto eol=lf
