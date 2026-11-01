@@ -8,6 +8,8 @@ Nền tảng quản lý tổ chức, sự kiện, RBAC đa cấp và đăng ký 
 
 **Quy tắc dữ liệu:** không chia sẻ database, không FK chéo service. Dùng UUID tham chiếu logic. Service sở hữu dữ liệu là nơi duy nhất được ghi dữ liệu đó. Gateway compose response nhưng không sở hữu nghiệp vụ.
 
+**Phạm vi:** hoàn thành trong 4 tuần với 5 người, mỗi người một service. Mọi hạng mục chia thành MUST (nghiệm thu) và STRETCH (mở rộng) ở §3.0; chỉ tính tiến độ theo MUST.
+
 ## 2. Sơ đồ tổng quan
 
 ```text
@@ -23,6 +25,21 @@ Identity/Event/Registration/Payment ──domain events──> RabbitMQ ──> 
 Các API service chỉ expose trong Docker network; Gateway là ingress public. RabbitMQ không thay thế REST cho truy vấn cần kết quả ngay.
 
 ## 3. Phân hệ, schema và API
+
+### 3.0 Phạm vi 4 tuần: MUST vs STRETCH
+
+Mặc định mọi bảng và endpoint trong §3 là MUST. Chỉ những mục đánh dấu `(STRETCH)` hoặc ghi ở cột STRETCH dưới đây được phép hoãn; không mở STRETCH khi MUST chưa có bằng chứng.
+
+| Miền | MUST (bắt buộc nghiệm thu) | STRETCH (hoãn được, không cản nghiệm thu) |
+|---|---|---|
+| Identity | Tám bảng ở §3.1; `register`/`login`/`refresh`; `GET /users/me`; tạo organization + membership + gán role; `POST /internal/authorization/check` khớp resource scope | Endpoint invitations; API tự quản lý permission; phát hiện reuse refresh token |
+| Event | Bảng `events`; CRUD + publish/cancel; check quyền qua Identity | `event_speakers`, `event_schedule_items`, `event_assets` |
+| Registration | `ticket_types`, `inventory`, `reservations`, `reservation_items`, `registrations`, `tickets`; lock `FOR UPDATE` + `CHECK` quota; `Idempotency-Key`; worker giải phóng hết hạn; outbox | Check-in bằng QR/scanning; waitlist; giỏ vé nhiều loại có ưu đãi |
+| Payment | `payments`, `refunds`, `processed_messages`, `outbox_events`; mock provider; callback idempotent | Adapter provider thật; xác minh chữ ký nâng cao; báo cáo đối soát |
+| Notification | `notification_jobs`, `processed_messages`; consumer idempotent; retry; Mailpit hoặc log | `delivery_attempts`; template engine; SMS/push |
+| Gateway | Routing qua một cổng; verify JWT; một endpoint API Composition; error envelope thống nhất | Rate limit phân tán, cache, circuit breaker |
+| Frontend | Bốn trang: đăng nhập, danh sách + chi tiết event, đặt vé, vé của tôi | Trang quản trị, dashboard, design system |
+| Hạ tầng | Một `docker-compose.yml` chạy 5 database + RabbitMQ + Gateway + 5 service | Observability đầy đủ, K8s, auto-scaling |
 
 ### 3.1 Identity & Organization Service (`identity_db`)
 
@@ -41,26 +58,26 @@ Các API service chỉ expose trong Docker network; Gateway là ingress public. 
 
 **RBAC:** Owner cấp organization quản lý cấu hình, thành viên và sự kiện. Admin có các permission quản trị được gán. Speaker là role cấp event với quyền giới hạn. Attendee đăng ký ở Registration; có thể có quyền cấp event nếu sản phẩm cần. Quyền phải khớp cả role/action lẫn phạm vi resource.
 
-**Endpoints:** `POST /auth/register`, `/auth/login`, `/auth/refresh`; `GET /users/me`; `POST /organizations`; `GET /organizations/{orgId}/members`; `POST /organizations/{orgId}/members/invitations`; `PUT /organizations/{orgId}/members/{userId}/roles`; `POST /internal/authorization/check`.
+**Endpoints:** `POST /auth/register`, `/auth/login`, `/auth/refresh`; `GET /users/me`; `POST /organizations`; `GET /organizations/{orgId}/members`; `PUT /organizations/{orgId}/members/{userId}/roles`; `POST /internal/authorization/check`. STRETCH: `POST /organizations/{orgId}/members/invitations` — ở MUST, admin gán role trực tiếp cho user đã có tài khoản.
 
 **Tích hợp:** Gateway xác minh JWT; Event Service gọi authorization check. Phát `UserRegistered`, `OrganizationCreated`, `MembershipChanged`.
 
 ### 3.2 Event Service (`event_db`)
 
-**Trách nhiệm:** event, lịch, địa điểm, diễn giả, trạng thái publish/cancel.
+**Trách nhiệm (MUST):** thông tin event, địa điểm trong `venue`, trạng thái publish/cancel.
 
 | Bảng | Cột chính |
 |---|---|
 | `events` | `id UUID PK`, `organization_id UUID`, `created_by UUID`, `title TEXT`, `slug TEXT`, `description TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `timezone TEXT`, `venue JSONB`, `version BIGINT` |
-| `event_speakers` | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, `name TEXT`, `bio TEXT`, `sort_order INT` |
-| `event_schedule_items` | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
-| `event_assets` | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
+| `event_speakers` (STRETCH) | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, `name TEXT`, `bio TEXT`, `sort_order INT` |
+| `event_schedule_items` (STRETCH) | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
+| `event_assets` (STRETCH) | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
 
 `organization_id`, `created_by`, `user_id` là tham chiếu, không FK sang Identity DB. Endpoints: `POST /events`, `GET/PATCH /events/{eventId}`, `POST /events/{eventId}/publish`, `POST /events/{eventId}/cancel`, `GET /organizations/{orgId}/events`, `GET /public/events/{slug}`. Kiểm tra quyền qua Identity trước thay đổi. Phát `EventPublished`, `EventUpdated`, `EventCancelled`.
 
 ### 3.3 Registration & Ticketing (`registration_db`)
 
-**Trách nhiệm:** loại vé, quota, giữ chỗ, đăng ký, vé và check-in.
+**Trách nhiệm:** loại vé, quota, giữ chỗ, đăng ký, vé và check-in. Check-in ở MUST chỉ là chuyển `status` + `checked_in_at`; QR/scanning là STRETCH.
 
 | Bảng | Cột chính |
 |---|---|
@@ -86,7 +103,7 @@ Các API service chỉ expose trong Docker network; Gateway là ingress public. 
 | `processed_messages` | `message_id UUID PK`, `processed_at TIMESTAMPTZ` |
 | `outbox_events` | `id UUID PK`, `aggregate_id UUID`, `event_type TEXT`, `payload JSONB`, `published_at TIMESTAMPTZ NULL` |
 
-`reservation_id`/`user_id` là ID tham chiếu, không FK chéo. API nội bộ: `POST /internal/payments` (idempotency key), `GET /internal/payments/{id}`, `POST /internal/payments/{id}/refund`. Phát `PaymentSucceeded`, `PaymentFailed`, `RefundCompleted`; callback provider phải xác minh chữ ký và xử lý idempotent.
+`reservation_id`/`user_id` là ID tham chiếu, không FK chéo. API nội bộ: `POST /internal/payments` (idempotency key), `GET /internal/payments/{id}`, `POST /internal/payments/{id}/refund`. Phát `PaymentSucceeded`, `PaymentFailed`, `RefundCompleted`. MUST dùng mock provider: callback mock ký HMAC theo secret chung, verify rồi mới xử lý, và idempotent theo `idempotency_key`. Adapter provider thật và đối soát là STRETCH.
 
 ### 3.5 Notification Service (`notification_db`)
 
@@ -96,7 +113,9 @@ Các API service chỉ expose trong Docker network; Gateway là ingress public. 
 |---|---|
 | `notification_jobs` | `id UUID PK`, `recipient_user_id UUID NULL`, `recipient_email TEXT`, `event_type TEXT`, `template_key TEXT`, `payload JSONB`, `status TEXT`, `attempts INT`, `created_at TIMESTAMPTZ` |
 | `processed_messages` | `message_id UUID PK`, `processed_at TIMESTAMPTZ` |
-| `delivery_attempts` | `id UUID PK`, `job_id UUID`, `provider TEXT`, `status TEXT`, `response TEXT`, `attempted_at TIMESTAMPTZ` |
+| `delivery_attempts` (STRETCH) | `id UUID PK`, `job_id UUID`, `provider TEXT`, `status TEXT`, `response TEXT`, `attempted_at TIMESTAMPTZ` |
+
+Ở MUST, kết quả mỗi lần gửi ghi trực tiếp vào `notification_jobs.status`/`attempts` và log; không cần bảng `delivery_attempts`.
 
 Nhận `RegistrationConfirmed`, `TicketIssued`, `EventUpdated`, `EventCancelled` từ RabbitMQ. Lưu message đã xử lý để consumer idempotent. Local có thể gửi vào Mailpit hoặc log giả lập.
 
@@ -143,18 +162,20 @@ Compose gốc cần có Gateway, năm service, năm PostgreSQL database/volume �
 
 Lệnh dự kiến: `docker compose up --build`, `docker compose down`.
 
-## 6. Lộ trình thực hiện
+## 6. Lộ trình 4 tuần (chỉ tính MUST)
 
-1. Chốt use case, OpenAPI, message contracts, ADR database-per-service.
-2. Dựng monorepo, Compose, năm PostgreSQL database riêng và broker.
-3. Làm Identity/Auth/RBAC và authorization check.
-4. Làm Event CRUD, publish/cancel, RBAC.
-5. Làm ticket inventory, lock, idempotency, reservation expiry và phát vé.
-6. Làm Payment mock + Saga/outbox/consumer/notification.
-7. Làm Gateway routes, composition và frontend.
-8. Hoàn thiện báo cáo, hướng dẫn chạy local, demo tải đồng thời và kiểm tra invariant quota.
+| Tuần | Việc (MUST) | Bằng chứng hoàn thành |
+|---|---|---|
+| 1 | Chốt tech stack. Đóng băng hợp đồng: OpenAPI cho Gateway + năm service, schema event có version, topology exchange/queue, bảng port + biến môi trường, quy ước Gateway truyền danh tính cho service. Dựng Compose cho năm database + RabbitMQ và một service template (healthcheck, error envelope, migration runner, outbox worker, correlation ID) | `docker compose up` healthy cho toàn bộ hạ tầng; contract được cả nhóm approve; template build ra ảnh Docker chạy được |
+| 2 | Identity: auth, RBAC, `authorization/check`. Event: CRUD, publish/cancel, gọi check | Đăng nhập lấy JWT qua Gateway; admin của org A nhận 403 khi sửa event của org B |
+| 3 | Registration: inventory, lock, `Idempotency-Key`, reservation hết hạn, outbox. Payment: mock + saga | 200 request đồng thời trên capacity 100: không vượt quota, không nhân đôi reservation; invariant `sold + reserved <= capacity` vẫn đúng sau khi chạy |
+| 4 | Notification consumer + email. Gateway API Composition. Frontend bốn trang. Seed data, báo cáo, hướng dẫn chạy | Đường thẳng đứng: login → tạo event → giữ chỗ → payment mock → nhận email → thấy vé; demo tải đồng thời chạy lại bằng một lệnh |
+
+**Quy tắc cắt/giữ:** service nào chậm thì cắt STRETCH của service đó trước. Hai invariant không được cắt: quota `sold + reserved <= capacity` và RBAC khớp resource scope. Đường thẳng đứng tuần 4 là demo chính; STRETCH chỉ bàn sau khi nó chạy.
 
 ## 7. Tiêu chí nghiệm thu
+
+Chỉ tính cột MUST ở §3.0; hạng mục STRETCH không nằm trong tiêu chí nghiệm thu.
 
 - Frontend chỉ gọi Gateway; Gateway có routing, JWT chung và API Composition.
 - Có năm service độc lập và năm PostgreSQL database riêng.
