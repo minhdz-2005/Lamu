@@ -12,7 +12,7 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 | Danh tính | Gateway verify JWT rồi chuyển tiếp `Authorization` + `X-User-Id` + `X-Request-Id`. Service không tự verify chữ ký; endpoint `POST /internal/...` chỉ chấp nhận lời gọi từ network nội bộ. |
 | JWT | HS256 với `JWT_SECRET` chung trong network local; Identity ký, Gateway verify. |
 | Error envelope | Mọi lỗi trả cùng một shape: `{"error": {"code": "SOLD_OUT", "message": "...", "request_id": "..."}}`. HTTP status mang ngữ nghĩa, `code` mang loại lỗi. |
-| Mã lỗi dùng chung | `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `IDEMPOTENCY_KEY_REQUIRED` 400, `CONFLICT` 409, `SOLD_OUT` 409, `UPSTREAM_UNAVAILABLE` 502. |
+| Mã lỗi dùng chung | `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `IDEMPOTENCY_KEY_REQUIRED` 400, `CONFLICT` 409, `SOLD_OUT` 409, `SALES_CLOSED` 409, `TIME_LOCKED` 409, `EMAIL_TAKEN` 409, `SLUG_TAKEN` 409, `ALREADY_CHECKED_IN` 409, `TICKET_VOIDED` 409, `UPSTREAM_UNAVAILABLE` 502. UI map từng mã một câu tiếng Việt, không toast `code` thô cho user. |
 | Idempotency | Endpoint ghi dữ liệu do user gọi phải nhận header `Idempotency-Key`; gọi lại cùng key trả đúng kết quả cũ. |
 | Thời gian & ID | `TIMESTAMPTZ` xuất ra RFC3339 UTC; mọi ID là UUID string; field JSON dùng `snake_case`. |
 | Permission | Chỉ dùng 10 mã seed trong §3.1.1 kiến trúc. Service gửi mã khi check quyền, không tự thêm mã mới. |
@@ -53,7 +53,7 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 | `GET /public/events/{slug}` | Event công khai cho trang chi tiết | → `{title, description, starts_at, ends_at, timezone, venue, status, organization_id}` | 404 nếu chưa PUBLISHED | Công khai | đọc |
 | STRETCH `GET/PUT /events/{eventId}/speakers`, `/schedule`, `/assets` | Diễn giả, lịch nhiều phiên, ảnh | | | `event.update` | |
 
-Payload `EventPublished` và `EventCancelled` gồm `event_id`, `organization_id`, `slug`, `status`, `starts_at`, `ends_at`, `cancelled_reason` — đủ để Registration và Payment phản ứng mà không gọi lại Event.
+Payload `EventPublished` và `EventCancelled` gồm `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at`, `cancelled_reason` — đủ để Registration và Payment phản ứng mà không gọi lại Event. `EventUpdated` gồm `event_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` để Registration ghi đè `event_snapshot`.
 
 ## 3. Registration & Ticketing Service (`registration_db`)
 
@@ -61,14 +61,15 @@ Payload `EventPublished` và `EventCancelled` gồm `event_id`, `organization_id
 |---|---|---|---|---|---|
 | `POST /events/{eventId}/ticket-types` | Tạo loại vé và cấp quota ban đầu | `{name, price, currency, capacity, sales_start, sales_end}` → `{ticket_type_id}` | 400, 403, 409 event chưa PUBLISHED | `event.update` trên event | ghi `ticket_types`, `inventory` (sold=0, reserved=0) |
 | `GET /events/{eventId}/ticket-types` | Danh sách loại vé cho trang bán | → `[{id, name, price, currency, status, sales_start, sales_end}]` | 404 | Công khai khi event PUBLISHED | đọc `ticket_types`, `event_snapshot` |
-| `GET /events/{eventId}/availability` | Chỗ còn từng loại, tính `capacity - sold - reserved`, kiểm tra cửa bán theo snapshot | → `[{ticket_type_id, capacity, sold, reserved, available, sales_open}]` | 404, 409 event không PUBLISHED | Công khai | đọc `inventory`, `event_snapshot` (không cache quá 5 giây) |
+| `GET /events/{eventId}/availability` | Chỗ còn từng loại, tính `capacity - sold - reserved`, kiểm tra cửa bán theo snapshot | → `[{ticket_type_id, name, price, currency, capacity, sold, reserved, available, sales_open}]` | 404, 409 event không PUBLISHED | Công khai | đọc `inventory`, `ticket_types`, `event_snapshot` (không cache quá 5 giây) |
 | `PATCH /ticket-types/{ticketTypeId}` | Đổi giá/trạng thái/thời hạn bán; `capacity` chỉ được tăng | `{price?, status?, sales_start?, sales_end?, capacity?}` → `{status: "OK"}` | 403, 404, 409 capacity thấp hơn `sold+reserved` | `event.update` | ghi `ticket_types`, `inventory` |
 | `POST /events/{eventId}/reservations` | **Giữ chỗ**: khóa inventory, tăng `reserved`, tạo reservation. Nếu `total_amount = 0` thì confirm và phát vé ngay trong cùng transaction | header `Idempotency-Key`, `{items: [{ticket_type_id, quantity}]}` → vé miễn phí: `{registration_id, tickets[]}`; vé có phí: `{reservation_id, status: "HELD", expires_at, total_amount}` | 400 thiếu key, 409 `SOLD_OUT`, 409 `SALES_CLOSED`, 404 | Đã đăng nhập | ghi `reservations`, `reservation_items`, `inventory`, `outbox`; vé có phí mới phát `ReservationCreated` |
 | `GET /reservations/{reservationId}` | Trạng thái reservation; frontend polling chờ kết quả thanh toán | → `{status, expires_at, items[], total_amount, payment_status}` | 404, 403 không phải chủ | Self | đọc `reservations`, `reservation_items` |
 | `POST /reservations/{reservationId}/confirm` | `reserved` → `sold`, tạo registration + phát vé. **Nội bộ saga**, không route qua Gateway cho user | → `{registration_id, tickets[]}` | 409 đã confirm/hết hạn, 403 | Nội bộ | ghi `registrations`, `tickets`, `inventory`, `outbox`; phát `RegistrationConfirmed`, `TicketIssued` |
 | `DELETE /reservations/{reservationId}` | Hủy chủ động, hoàn lại `reserved` | → `{status: "RELEASED"}` | 404, 409 đã confirm | Self | ghi `reservations`, `inventory`, `outbox`; phát `ReservationReleased` (`CANCELLED`) |
-| `GET /users/me/tickets` | Vé của tôi + trạng thái check-in | → `[{ticket_id, code, event_id, ticket_type_name, status, checked_in_at}]` | 401 | Self | đọc |
-| `POST /tickets/{ticketId}/check-in` | Chuyển vé sang `USED`, ghi thời điểm. MUST chỉ đổi trạng thái; QR là STRETCH | → `{status: "USED", checked_in_at}` | 409 đã dùng, 404, 403 | `ticket.checkin` trên event | ghi `tickets` |
+| `GET /users/me/tickets` | Vé của tôi + trạng thái check-in; title/slug/ngày lấy từ `event_snapshot` nên không gọi sang Event | → `[{ticket_id, code, event_id, event_title, event_slug, event_starts_at, event_status, ticket_type_name, status, checked_in_at}]` | 401 | Self | đọc `tickets`, `registrations`, `ticket_types`, `event_snapshot` |
+| `GET /events/{eventId}/tickets?status=&limit=&offset=` | Bảng vé của event cho bàn check-in: mã vé, trạng thái, thời điểm đã vào (không kèm tên người mua) | → `[{ticket_id, code, ticket_type_name, status, checked_in_at}]` + `total` | 404, 403 | `event.read` trên event | đọc `tickets`, `ticket_types` |
+| `POST /tickets/check-in` | Chuyển vé sang `USED`, ghi `checked_in_at`; tra vé theo **mã in trên ticket** | `{code}` → `{ticket_id, status: "USED", checked_in_at, event_id}` | 404 mã không tồn tại, 409 `ALREADY_CHECKED_IN`, 409 `TICKET_VOIDED`, 403 | `ticket.checkin` trên event sở hữu mã vé | ghi `tickets`; không phát event ở MUST |
 | consume `PaymentSucceeded` / `PaymentFailed` | Confirm hoặc release theo saga (quyết định 3) | | | Nội bộ | như `confirm` |
 | consume `EventPublished` / `EventUpdated` / `EventCancelled` | Cập nhật `event_snapshot`; khi cancel thì release `reserved`, đánh dấu vé `VOIDED` và phát `BookingCancelled` cho từng registration | | | Nội bộ | ghi `event_snapshot`, `reservations`, `registrations`, `tickets`, `outbox` |
 | Worker (không phải API) | Quét `HELD` quá `expires_at` bằng `FOR UPDATE SKIP LOCKED`, giải phóng `reserved` đúng một lần | | | Nội bộ | phát `ReservationReleased` (`reason: EXPIRED`) |
@@ -107,6 +108,28 @@ Notification không nhận `EventUpdated` hay `EventCancelled`: hai event đó k
 
 Gateway không tự quyết định giá, quota hay trạng thái nghiệp vụ; các route còn lại chỉ chuyển tiếp `/api/...` xuống service sở hữu.
 
+Shape response của `GET /api/public/events/{slug}/details` (frontend chỉ cần một request này cho trang chi tiết):
+
+```json
+{
+  "event": {
+    "id": "uuid", "slug": "auto-demo", "title": "string", "description": "string",
+    "starts_at": "2026-12-01T02:30:00Z", "ends_at": "2026-12-01T09:00:00Z",
+    "timezone": "Asia/Ho_Chi_Minh", "venue": { "name": "string", "address": "string" },
+    "status": "PUBLISHED", "organization_id": "uuid"
+  },
+  "organization": { "name": "Luma Studio", "slug": "luma" },
+  "availability": [
+    { "ticket_type_id": "uuid", "name": "Early", "price": "150000.00", "currency": "VND",
+      "capacity": 100, "sold": 40, "reserved": 5, "available": 55, "sales_open": true }
+  ],
+  "degraded": false,
+  "degraded_sources": []
+}
+```
+
+`degraded_sources` chỉ chứa các giá trị `event`, `organization`, `availability`. Nguồn lỗi thì key đó có giá `null` và UI hiện empty state riêng cho khu đó (xem [docs/ui/03](../ui/03-event-detail-and-booking.md)).
+
 ## 7. Ma trận use case -> API
 
 | Use case | Chuỗi API |
@@ -120,7 +143,7 @@ Gateway không tự quyết định giá, quota hay trạng thái nghiệp vụ;
 | Hết giờ giữ chỗ | worker `expires_at` → release `reserved` → `ReservationReleased` (`EXPIRED`) → email |
 | Thanh toán thất bại | `PaymentFailed` → Registration release `reserved` → `ReservationReleased` (`PAYMENT_FAILED`) → email |
 | Event bị hủy | `POST /events/{id}/cancel` → `EventCancelled` → Registration release/void + `BookingCancelled` → email; Payment tự refund → `RefundCompleted` |
-| Check-in tại cửa | `GET /users/me/tickets` (khách xuất mã) → `POST /tickets/{id}/check-in` |
+| Check-in tại cửa | `GET /events/{id}/tickets` (organizer mở bảng vé) → `POST /tickets/check-in` khi khách đọc mã |
 | Trang chủ sự kiện | `GET /public/events` → `GET /api/public/events/{slug}/details` |
 
 ## 8. Quyết định đã chốt

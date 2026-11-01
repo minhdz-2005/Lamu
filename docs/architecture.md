@@ -53,7 +53,7 @@ Mặc định mọi bảng và endpoint trong §3 là MUST. Chỉ những mục 
 | Payment | `payments` (kèm `event_id`), `refunds`, `processed_messages`, `outbox_events`; khởi động bằng `ReservationCreated`; mock provider idempotent; tự refund khi `EventCancelled` | `POST /internal/payments` qua REST; adapter provider thật; báo cáo đối soát |
 | Notification | `notification_jobs`, `processed_messages`; tiêu bốn event mang `recipient_email`; consumer idempotent; retry; Mailpit hoặc log | `delivery_attempts`; template engine; SMS/push; `GET /users/me/notifications` |
 | Gateway | Routing qua một cổng; verify JWT; một endpoint API Composition; error envelope thống nhất | Rate limit phân tán, cache, circuit breaker |
-| Frontend | Bốn trang: đăng nhập, danh sách event, chi tiết event kèm đặt vé, vé của tôi | Trang quản trị, dashboard, design system |
+| Frontend | Năm trang theo [tài liệu UI](ui/README.md): đăng nhập/đăng ký, danh sách event, chi tiết event kèm đặt vé, vé của tôi, và một trang organizer tối giản (tạo + publish event, thêm loại vé, check-in theo mã vé) | Dashboard, quản lý thành viên/role, đổi giờ event, design system riêng, QR scanning |
 | Hạ tầng | Một `docker-compose.yml` chạy 5 database + RabbitMQ + Mailpit + Gateway + 5 service | Observability đầy đủ, K8s, auto-scaling |
 
 ### 3.1 Identity & Organization Service (`identity_db`)
@@ -101,7 +101,7 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 | `event_schedule_items` (STRETCH) | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
 | `event_assets` (STRETCH) | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
 
-`organization_id`, `created_by`, `user_id` là tham chiếu, không FK sang Identity DB. Endpoints: `POST /events`, `GET/PATCH /events/{eventId}`, `POST /events/{eventId}/publish`, `POST /events/{eventId}/cancel`, `GET /organizations/{orgId}/events`, `GET /public/events`, `GET /public/events/{slug}`. Kiểm tra quyền qua Identity trước mọi thay đổi. Tạo `DRAFT` không phát event; chỉ phát `EventUpdated` khi sửa, `EventPublished` khi publish, `EventCancelled` khi hủy. `PATCH` sau PUBLISHED chỉ sửa `title`, `description`, `venue`; đổi `starts_at`/`ends_at` khi `sold + reserved > 0` trả 409 (quyết định 6). `EventPublished` và `EventCancelled` mang `event_id`, `organization_id`, `slug`, `status`, `starts_at`, `ends_at` để consumer không phải gọi lại Event.
+`organization_id`, `created_by`, `user_id` là tham chiếu, không FK sang Identity DB. Endpoints: `POST /events`, `GET/PATCH /events/{eventId}`, `POST /events/{eventId}/publish`, `POST /events/{eventId}/cancel`, `GET /organizations/{orgId}/events`, `GET /public/events`, `GET /public/events/{slug}`. Kiểm tra quyền qua Identity trước mọi thay đổi. Tạo `DRAFT` không phát event; chỉ phát `EventUpdated` khi sửa, `EventPublished` khi publish, `EventCancelled` khi hủy. `PATCH` sau PUBLISHED chỉ sửa `title`, `description`, `venue`; đổi `starts_at`/`ends_at` khi `sold + reserved > 0` trả 409 (quyết định 6). `EventPublished` và `EventCancelled` mang `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` để consumer không phải gọi lại Event; `EventUpdated` mang đủ bộ `title`, `slug`, `starts_at`, `ends_at`, `status` để Registration ghi đè `event_snapshot`.
 
 ### 3.3 Registration & Ticketing (`registration_db`)
 
@@ -115,9 +115,9 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 | `reservation_items` | `id UUID PK`, `reservation_id UUID`, `ticket_type_id UUID`, `quantity INT`, `unit_price NUMERIC(12,2)` |
 | `registrations` | `id UUID PK`, `reservation_id UUID`, `user_id UUID`, `status TEXT`, `registered_at TIMESTAMPTZ` |
 | `tickets` | `id UUID PK`, `registration_id UUID`, `ticket_type_id UUID`, `code TEXT UNIQUE`, `status TEXT`, `checked_in_at TIMESTAMPTZ NULL` |
-| `event_snapshot` | `event_id UUID PK`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`; cập nhật từ `EventPublished`/`EventUpdated`/`EventCancelled` |
+| `event_snapshot` | `event_id UUID PK`, `title TEXT`, `slug TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`; cập nhật từ `EventPublished`/`EventUpdated`/`EventCancelled` |
 
-`event_id`, `user_id` là ID tham chiếu, không FK chéo. Registration không gọi REST sang Event: mọi kiểm tra "event đã publish chưa, còn trong thời gian bán không" đọc `event_snapshot` (eventual consistency, chậm nhất vài giây). Endpoint: `POST /events/{id}/ticket-types`, `GET /events/{id}/ticket-types`, `PATCH /ticket-types/{id}`, `GET /events/{id}/availability`, `POST /events/{id}/reservations` (bắt buộc `Idempotency-Key`), `GET /reservations/{id}`, `POST /reservations/{id}/confirm` (nội bộ, chỉ consumer `PaymentSucceeded` gọi; vé miễn phí đã confirm ngay trong `POST /reservations` nên không tới đây; không route qua Gateway cho user), `DELETE /reservations/{id}`, `GET /users/me/tickets`, `POST /tickets/{id}/check-in`.
+`event_id`, `user_id` là ID tham chiếu, không FK chéo. Registration không gọi REST sang Event: mọi kiểm tra "event đã publish chưa, còn trong thời gian bán không" đọc `event_snapshot` (eventual consistency, chậm nhất vài giây). Endpoint: `POST /events/{id}/ticket-types`, `GET /events/{id}/ticket-types`, `PATCH /ticket-types/{id}`, `GET /events/{id}/availability`, `POST /events/{id}/reservations` (bắt buộc `Idempotency-Key`), `GET /reservations/{id}`, `POST /reservations/{id}/confirm` (nội bộ, chỉ consumer `PaymentSucceeded` gọi; vé miễn phí đã confirm ngay trong `POST /reservations` nên không tới đây; không route qua Gateway cho user), `DELETE /reservations/{id}`, `GET /users/me/tickets`, `GET /events/{id}/tickets` (organizer, quyền `event.read`), `POST /tickets/check-in` (body `{code}`, organizer check-in theo mã vé in trên ticket; quyền `ticket.checkin`).
 
 **Concurrency:** transaction khóa hàng inventory bằng `SELECT ... FOR UPDATE`; không gọi mạng trong transaction. Ràng buộc `CHECK (sold >= 0 AND reserved >= 0 AND sold + reserved <= capacity)`. Ghi reservation và tăng reserved nguyên tử. Nếu `total_amount = 0` thì confirm luôn trong cùng transaction (quyết định 2). Confirm chuyển `reserved` sang `sold`, tạo ticket và ghi outbox. Worker hết hạn dùng `FOR UPDATE SKIP LOCKED` để giải phóng `reserved` đúng một lần. Phát `ReservationCreated` (chỉ khi `total_amount > 0`, payload mang `event_id`), `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased` (`reason` ∈ `EXPIRED`/`CANCELLED`/`PAYMENT_FAILED`/`EVENT_CANCELLED`), `BookingCancelled`; nhận `EventCancelled`, `PaymentSucceeded`, `PaymentFailed`. Event gửi cho Notification phải mang `recipient_email` (quyết định 1).
 
@@ -214,7 +214,7 @@ Lệnh dự kiến: `docker compose up --build`, `docker compose down`.
 | 1 | Chốt tech stack. Đóng băng hợp đồng từ bản nháp [API catalog](api/catalog.md): OpenAPI cho Gateway + năm service, schema event có version, topology exchange/queue, bảng port + biến môi trường, quy ước Gateway truyền danh tính cho service. Dựng Compose cho năm database + RabbitMQ + Mailpit và một service template (healthcheck, error envelope, migration runner, outbox worker, correlation ID) | `docker compose up` healthy cho toàn bộ hạ tầng; contract được cả nhóm approve; template build ra ảnh Docker chạy được |
 | 2 | Identity: auth, RBAC, `authorization/check`. Event: CRUD, publish/cancel, gọi check | Đăng nhập lấy JWT qua Gateway; admin của org A nhận 403 khi sửa event của org B |
 | 3 | Registration: inventory, lock, `Idempotency-Key`, reservation hết hạn, outbox. Payment: mock + saga | 200 request đồng thời trên capacity 100: không vượt quota, không nhân đôi reservation; invariant `sold + reserved <= capacity` vẫn đúng sau khi chạy |
-| 4 | Notification consumer + email. Gateway API Composition. Frontend bốn trang. Seed data, báo cáo, hướng dẫn chạy | Đường thẳng đứng: login → tạo event → giữ chỗ → payment mock → nhận email → thấy vé; demo tải đồng thời chạy lại bằng một lệnh |
+| 4 | Notification consumer + email. Gateway API Composition. Frontend năm trang (xem [docs/ui](ui/README.md)). Seed data, báo cáo, hướng dẫn chạy | Đường thẳng đứng: login → tạo event trên trang organizer → giữ chỗ → payment mock → nhận email → thấy vé; demo tải đồng thời chạy lại bằng một lệnh |
 
 **Quy tắc cắt/giữ:** service nào chậm thì cắt STRETCH của service đó trước. Hai invariant không được cắt: quota `sold + reserved <= capacity` và RBAC khớp resource scope. Đường thẳng đứng tuần 4 là demo chính; STRETCH chỉ bàn sau khi nó chạy.
 
@@ -223,6 +223,7 @@ Lệnh dự kiến: `docker compose up --build`, `docker compose down`.
 Chỉ tính cột MUST ở §3.0; hạng mục STRETCH không nằm trong tiêu chí nghiệm thu.
 
 - Frontend chỉ gọi Gateway; Gateway có routing, JWT chung và API Composition.
+- Frontend đủ năm trang MUST trong [docs/ui](ui/README.md); không màn hình nào gọi thẳng cổng service hay endpoint `/internal/...`, và mọi state loading/empty/error/sold-out đều có đường thoát nhìn thấy được.
 - Có năm service độc lập và năm PostgreSQL database riêng.
 - Không FK chéo database/service; không dùng schema persistence chung.
 - RBAC kiểm tra action và resource scope.
