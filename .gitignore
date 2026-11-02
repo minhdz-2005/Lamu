@@ -1,0 +1,17 @@
+# Dependencies và build output
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Biến môi trường — chỉ commit .env.example, secret local không bao giờ vào repo
+.env
+.env.local
+.env.*.local
+
+# Runtime
+*.log
+.DS_Store
+Thumbs.db

@@ -6,7 +6,8 @@ Phạm vi lấy từ cột MUST §3.0 của [docs/architecture.md](../architectu
 
 | File | Feature | Route frontend | Cần đăng nhập |
 |---|---|---|---|
-| [00-conventions.md](00-conventions.md) | Quy ước dùng chung: token, error, loading, tiền, thời gian, idempotency | — | — |
+| [00-conventions.md](00-conventions.md) | Quy ước dùng chung: token, error, loading, tiền, thời gian, idempotency, design system (§13) | — | — |
+| — (code trong `src/features/landing`) | Trang giới thiệu Lamu: hero, kiến trúc, hành trình, tài khoản demo. Không có wireframe riêng vì không gọi API | `/` | Không |
 | [01-auth.md](01-auth.md) | Đăng ký + đăng nhập + phiên hết hạn | `/auth` | Không |
 | [02-event-discovery.md](02-event-discovery.md) | Danh sách event, tìm kiếm, phân trang | `/events` | Không |
 | [03-event-detail-and-booking.md](03-event-detail-and-booking.md) | Chi tiết event + giữ chỗ + chờ kết quả thanh toán | `/events/[slug]` | Khi giữ chỗ |
@@ -21,6 +22,7 @@ Mỗi file tự chứa đủ thông tin để làm mà không phải đọc file
 
 | Route | API gọi ra (tất cả có tiền tố `/api`) |
 |---|---|
+| `/` | Không call API nào — trang tĩnh, chỉ link tới các route bên dưới |
 | `/auth` | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` |
 | `/events` | `GET /public/events` |
 | `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}` |

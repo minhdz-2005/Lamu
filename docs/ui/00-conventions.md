@@ -16,9 +16,9 @@
 
 | Mục | Chốt |
 |---|---|
-| Lưu | `access_token` và `refresh_token` trong `localStorage` dưới key `luma.access`, `luma.refresh`. Demo local, chấp nhận rủi ro XSS để khỏi cần backend cookie; không dùng môi trường thật. |
+| Lưu | `access_token` và `refresh_token` trong `localStorage` dưới key `luma.access`, `luma.refresh`. Demo local, chấp nhận rủi ro XSS để khỏi cần backend cookie; không dùng môi trường thật. Theme đã chọn cũng nằm trong `localStorage` dưới key `luma.theme` (xem §13). |
 | Gửi | Mọi request có token kèm `Authorization: Bearer <access_token>`. |
-| Hết hạn | Interceptor bắt `401 UNAUTHENTICATED` → gọi `POST /api/auth/refresh` với `refresh_token` **một lần**, lưu token mới, retry request cũ. Refresh cũng 401 → xóa token, redirect `/auth?next=<route hiện tại>`, toast "Phiên hết hạn, đăng nhập lại". |
+| Hết hạn | Interceptor bắt `401 UNAUTHENTICATED` → gọi `POST /api/auth/refresh` với `refresh_token` **một lần**, lưu token mới, retry request cũ. Refresh cũng 401 → xóa token, redirect `/auth?next=<route hiện tại>`, toast "Phiên hết hạn, đăng nhập lại". Ngoại lệ: route công khai (`/`, `/events`, `/events/{slug}`) chỉ xóa token, không đá người đọc khỏi trang đang xem. |
 | Chồng request | Nếu 3 request cùng 401, chỉ một lần refresh; các request còn lại chờ cùng promise đó. |
 | Trạng thái app | `authState ∈ {ANONYMOUS, AUTHENTICATED}` suy từ sự tồn tại của `access_token`. Không có "đang load session" vô hạn: timeout 3 giây coi như ANONYMOUS. |
 | Logout | `POST /api/auth/logout` với `refresh_token`; dù API trả lỗi vẫn xóa token local rồi redirect `/auth`. |
@@ -147,3 +147,19 @@ Form có `<label for>` thật, lỗi gắn `aria-describedby`, focus không mấ
 2. Không request nào ngoài bảng "Route → API" của feature.
 3. Snapshot route chính chạy được với `docker compose up` + seed data.
 4. Test manual theo mục "Checklist nghiệm thu" cuối file feature, ghi kết quả vào `docs/ui/reports/<feature>.md`.
+
+## 13. Design system (token, theme, khoảng cách)
+
+Toàn bộ giao diện đọc màu/chữ/khoảng cách từ token trong `frontend/src/app/globals.css`; component không hardcode hex và không tự đặt `padding` lẻ ngoài thang dưới.
+
+| Nhóm | Chốt |
+|---|---|
+| Thương hiệu | Tên hiển thị là **Lamu**. Font: `Be Vietnam Pro` (body) + `Space Grotesk` (title), tải bằng `<link>` trong `layout.tsx` để build không cần mạng. |
+| Bảng màu 60-30-10 | 60% trung tính (`--bg`, `--surface`, `--border`, `--text`), 30% primary indigo (`--primary`), 10% accent coral (`--accent`). Secondary teal (`--secondary`) dùng cho chip/eyebrow, không thay primary. |
+| Accent | Mỗi màn hình chỉ **một** nút accent cho thao tác quan trọng nhất (hero "Khám phá sự kiện", "Giữ chỗ"). Các nút phụ dùng `btn-primary`/`btn`. |
+| Theme | `data-theme="light\|dark"` trên `<html>`, key `luma.theme` trong `localStorage`, mặc định theo hệ điều hành. Script nạp trước paint (`THEME_BOOTSTRAP` trong `lib/theme.ts`) để không nhấp nháy. Nút chuyển theme nằm ở header. |
+| Spacing | Thang 4pt: `--s-1..--s-11` = 4/8/12/16/24/32/40/56/72/96/128 px. Block cách nhau bội số 8, phần tử trong block bội số 4. |
+| Chữ | `--fs-display` (hero) → `--fs-h1` (title trang) → `--fs-h2` (mục) → `--fs-h3` (thẻ) → `--fs-body` 15px → `--fs-sm`/`--fs-xs`. `h1` chỉ có một per trang. |
+| Chuyển động | Hover lift 2px, press scale, underline tab chạy `scaleX`, toast slide-in, modal scale-in. Mọi animation tắt khi `prefers-reduced-motion: reduce`. |
+| In vé | `@media print` ép token về nền sáng, chỉ `.print-area` nhìn thấy; nền tối không được làm vé in ra đen. |
+

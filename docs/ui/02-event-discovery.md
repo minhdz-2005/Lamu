@@ -68,7 +68,7 @@ GET /api/public/events?q=<string>&from=<YYYY-MM-DD>T00:00:00Z&limit=20&offset=0
 |---|---|---|
 | Tiêu đề | `title` | 2 dòng, cắt `…`; font to nhất card |
 | Ngày giờ | `starts_at` | `14:30 · 01/12/2026` (00 §6). Event đã qua (`starts_at < now`) thêm badge mờ "Đã diễn ra" |
-| Ban tổ chức | `organization_slug` | chữ nhỏ `bcorg: lamustudio` |
+| Ban tổ chức | `organization_slug` | chữ nhỏ `Ban tổ chức: luma` |
 | Trạng thái | API list không trả `status` → **suy từ `starts_at`** | `starts_at < now` = "Đã diễn ra". Không hiển thị "còn vé" vì danh sách này không có số liệu tồn kho (đó là việc của 03) |
 
 Không tự bịa field (`price`, `available`, `image`) ở trang này; catalog không trả thì không hiện.
