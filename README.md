@@ -1,6 +1,6 @@
-# LumaSOA
+# Lamu
 
-Đồ án nền tảng quản lý sự kiện theo SOA/Microservices: tổ chức, sự kiện, RBAC đa cấp và đăng ký vé có kiểm soát đồng thời.
+Nền tảng quản lý sự kiện theo Microservices: tổ chức, sự kiện, RBAC đa cấp và đăng ký vé có kiểm soát đồng thời.
 
 ## Tài liệu
 - [Kiến trúc và kế hoạch tổng thể](architecture.md)
