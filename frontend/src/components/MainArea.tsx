@@ -7,7 +7,7 @@ export function MainArea({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   return (
-    <main id="main" className={isLanding ? "landing-shell" : "container"}>
+    <main id="main" className={isLanding || pathname === "/auth" || pathname === "/me" || pathname === "/me/invitations" || pathname === "/organizations" || /^\/organizations\/[^/]+$/.test(pathname) ? "landing-shell" : "container"}>
       {children}
     </main>
   );

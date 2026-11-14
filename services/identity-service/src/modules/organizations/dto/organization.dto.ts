@@ -8,6 +8,7 @@ import {
   Length,
   Matches,
   ValidateNested,
+  ValidateIf,
 } from "class-validator";
 import type { components } from "../../../../../../shared/contracts/http/generated/identity";
 export type Assignment = components["schemas"]["RoleAssignment"];
@@ -22,10 +23,11 @@ export class CreateOrganizationDto implements CreateOrganization {
   @Transform(({ value }) =>
     typeof value === "string" ? value.trim().toLowerCase() : value,
   )
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(3, 63)
   @Matches(/^[a-z0-9]+(-[a-z0-9]+)*$/)
-  slug!: string;
+  slug?: string;
 }
 export class AssignmentDto {
   @IsIn(["OWNER", "ADMIN", "SPEAKER", "ATTENDEE"]) code!: Assignment["code"];

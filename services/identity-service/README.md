@@ -30,6 +30,8 @@ Swagger: [http://localhost:8080/docs](http://localhost:8080/docs), contract JSON
 
 ## Migration và seed
 
+Cập nhật 15/11/2026: tạo tổ chức qua POST `/api/organizations` chỉ cần body `{"name":"CLB Công nghệ"}` cùng Bearer token/Idempotency-Key. Backend tự sinh slug `clb-cong-nghe`; trùng base thêm hậu tố UUID. Có thể đọc slug thực tế qua GET organization hoặc `/users/me`. Client cũ vẫn có thể gửi slug explicit hợp lệ; trùng explicit giữ409 SLUG_TAKEN. Không gửi slug rỗng/null. Contract HTTP hiện tại1.3.0; [ADR0006](../../docs/adr/0006-organization-generated-slug.md). Không đổi slug/dữ liệu tổ chức cũ.
+
 Migration version `202611130001_m1`: tám bảng nền + outbox, CITEXT, FK nội bộ, CHECK scope/expiry và UNIQUE NULLS NOT DISTINCT. Không dùng `db push` hoặc `migrate reset`. Migration đã áp dụng là bất biến; production rollback dùng migration tiến hoặc backup/restore được kiểm thử riêng, không có auto destructive DOWN cho schema mới. Index inline chỉ tạo trên bảng mới; nâng cấp bảng lớn phải có chiến lược index/lock riêng. Production-sized migration/restore chưa được chạy trong M1 local.
 
 Image `identity-migrate` target tools chứa Prisma CLI/tsx cho migration, seed và benchmark; hai image app runtime loại dev runner/tsx, chạy user `node`. Seed là lệnh riêng, không nằm trong migration/startup:

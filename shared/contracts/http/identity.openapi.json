@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Identity M1 + M2 P5/P6",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Accepted 2026-11-13. Auth POST success 200; no Idempotency-Key. Refresh rotates within absolute seven-day session; logout requires matching verified sub/sid and current refresh. Revoked retry allowed until refresh expiry, access must remain valid. Email/display_name trimmed; password preserved. Local trusted network only; internal context headers cannot be supplied by public clients. LOCKED valid credentials: 403. Access may survive logout for up to 900s."
   },
   "servers": [
@@ -762,6 +762,9 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateOrganization"
+              },
+              "example": {
+                "name": "CLB Công nghệ"
               }
             }
           }
@@ -857,7 +860,8 @@
               }
             }
           }
-        }
+        },
+        "description": " Slug is optional. With name only, Identity generates a unique slug. Idempotency hashes the normalized request, not the generated slug; replay returns the original organization without new events."
       }
     },
     "/organizations/{orgId}": {
@@ -2854,8 +2858,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name",
-          "slug"
+          "name"
         ],
         "properties": {
           "name": {
@@ -2869,7 +2872,7 @@
             "minLength": 3,
             "maxLength": 63,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
-            "description": "Trimmed and lowercase before validation."
+            "description": "Optional explicit slug, trimmed and lowercase. When omitted, Identity generates a unique slug from name: NFD accents removed, Vietnamese đ mapped to d, lowercase ASCII letters/digits and hyphens; short names prefixed with org-, empty transliteration uses organization, maximum 63 characters. Collisions receive a UUID suffix. Explicit slug collisions still return 409 SLUG_TAKEN."
           }
         }
       },

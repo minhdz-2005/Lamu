@@ -125,6 +125,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Slug is optional. With name only, Identity generates a unique slug. Idempotency hashes the normalized request, not the generated slug; replay returns the original organization without new events. */
         post: operations["createOrganization"];
         delete?: never;
         options?: never;
@@ -394,8 +395,8 @@ export interface components {
         CreateOrganization: {
             /** @description Trimmed. */
             name: string;
-            /** @description Trimmed and lowercase before validation. */
-            slug: string;
+            /** @description Optional explicit slug, trimmed and lowercase. When omitted, Identity generates a unique slug from name: NFD accents removed, Vietnamese đ mapped to d, lowercase ASCII letters/digits and hyphens; short names prefixed with org-, empty transliteration uses organization, maximum 63 characters. Collisions receive a UUID suffix. Explicit slug collisions still return 409 SLUG_TAKEN. */
+            slug?: string;
         };
         OrganizationCreatedResult: {
             /** Format: uuid */
@@ -1112,6 +1113,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "CLB Công nghệ"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CreateOrganization"];
             };
         };

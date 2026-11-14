@@ -1,5 +1,7 @@
 # Kế hoạch triển khai Identity và API Gateway
 
+Cập nhật 15/11/2026 — yêu cầu mới sau P8: organization slug tự sinh khi chỉ gửi name, giữ slug explicit tùy chọn để tương thích client cũ. HTTP canonical hiện tại1.3.0, ADR0006/[báo cáo](report/REPORT_ORGANIZATION_AUTO_SLUG_01.md). Không đổi event schema v1 hoặc migration/dữ liệu cũ; các phiên bản1.2.0 bên dưới lưu evidence lịch sử M2/P8.
+
 Trạng thái cập nhật 14/11/2026: **M2 COMPLETE / ACCEPTED: P5/P6 đã triển khai, gate tự động PASS và manual Swagger/DOC-01 PASS theo xác nhận người dùng**. Ngày lập kế hoạch gốc: 12/11/2026.
 
 **P8 COMPLETE — chuẩn bị bàn giao, 14/11/2026:** [báo cáo P8](report/REPORT_P8_INTEGRATION_HANDOFF_01.md) ghi lượt mới full127/127, coverage, broker/lifecycle/Compose và target Compose P6; mapping API/event/frontend và H01–H05 ở [handoff §7–§10](../../docs/integration/identity-handoff.md). [Event HTTP resolver 0.1.0 DRAFT](../../shared/contracts/http/event-context.draft.openapi.json) máy kiểm được, không ACCEPTED/không adapter/provider thật. M4 NOT_STARTED; chờ chốt D09, browser/nhiều tab và owner/reviewer bên nhận. Không commit hoặc sửa frontend.

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { AuthHeader } from "@/features/auth/AuthHeader";
+import { AccountHeader } from "@/features/account/AccountHeader";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -35,6 +37,16 @@ function SunIcon() {
 
 export function Header() {
   const pathname = usePathname();
+  // Sample account/organization routes never mount the session-connected header.
+  if (pathname === "/me") return <AccountHeader />;
+  if (pathname === "/me/invitations") return <AccountHeader activeHref="/me/invitations" />;
+  if (pathname === "/organizations") return <AccountHeader activeHref="/organizations" />;
+  if (/^\/organizations\/[^/]+$/.test(pathname)) return <AccountHeader activeHref="/organizations" />;
+  return <SiteHeader />;
+}
+
+function SiteHeader() {
+  const pathname = usePathname();
   const { state, profile, organizations, logout } = useSession();
   const [theme, setTheme] = useState<Theme | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -65,6 +77,8 @@ export function Header() {
     : isOrganizer
       ? { href: "/organizer?tab=sell", label: "Bán vé", variant: "btn-primary" }
       : { href: "/organizer", label: "Tổ chức sự kiện", variant: "btn-primary" };
+
+  if (pathname === "/auth") return <AuthHeader theme={theme} onToggleTheme={toggleTheme} />;
 
   return (
     <header className="site-header no-print" data-scrolled={scrolled}>

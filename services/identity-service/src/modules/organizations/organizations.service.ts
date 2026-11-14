@@ -328,51 +328,101 @@ export class OrganizationsService {
     }
   }
   async create(actor: string, key: string, dto: CreateOrganizationDto) {
-    try {
-      return (await this.mutation(
-        actor,
-        "CREATE_ORGANIZATION",
-        key,
-        {},
-        { name: dto.name, slug: dto.slug },
-        async (tx) => {
-          const org = await tx.organization.create({
-            data: {
-              id: randomUUID(),
-              name: dto.name,
-              slug: dto.slug,
-              created_by: actor,
-            },
-          });
-          const m = await tx.membership.create({
-            data: { id: randomUUID(), organization_id: org.id, user_id: actor },
-          });
-          const owner = await tx.role.findFirstOrThrow({
-            where: { code: "OWNER", organization_id: null, scope: "ORG" },
-          });
-          await tx.membershipRole.create({
-            data: {
-              id: randomUUID(),
-              membership_id: m.id,
-              role_id: owner.id,
-              resource_type: "ORG",
-              resource_id: null,
-            },
-          });
-          await this.event(tx, "OrganizationCreated", "organization", org.id, {
-            organization_id: org.id,
-            slug: org.slug,
-            created_by: actor,
-          });
-          await this.membershipEvent(tx, m.id, "CREATED");
-          return { status: 201, body: { organization_id: org.id } };
-        },
-      ))!;
-    } catch (e) {
-      if ((e as { code?: string }).code === "P2002")
-        fail(409, "SLUG_TAKEN", "Slug already used");
-      throw e;
+    const base = dto.name
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[đĐ]/g, "d")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const generatedBase = (
+      base.length === 0
+        ? "organization"
+        : base.length < 3
+          ? "org-" + base
+          : base
+    )
+      .slice(0, 63)
+      .replace(/-+$/g, "");
+    // A unique-index race rolls back the entire transaction before retry.
+    // The hash uses the request, so generated collision suffixes never break replay.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        return (await this.mutation(
+          actor,
+          "CREATE_ORGANIZATION",
+          key,
+          {},
+          { name: dto.name, slug: dto.slug ?? null },
+          async (tx) => {
+            let slug = dto.slug ?? generatedBase;
+            if (
+              dto.slug === undefined &&
+              (attempt > 0 ||
+                (await tx.organization.findUnique({ where: { slug } })))
+            ) {
+              slug =
+                generatedBase.slice(0, 26).replace(/-+$/g, "") +
+                "-" +
+                randomUUID();
+            }
+            const org = await tx.organization.create({
+              data: {
+                id: randomUUID(),
+                name: dto.name,
+                slug,
+                created_by: actor,
+              },
+            });
+            const m = await tx.membership.create({
+              data: {
+                id: randomUUID(),
+                organization_id: org.id,
+                user_id: actor,
+              },
+            });
+            const owner = await tx.role.findFirstOrThrow({
+              where: { code: "OWNER", organization_id: null, scope: "ORG" },
+            });
+            await tx.membershipRole.create({
+              data: {
+                id: randomUUID(),
+                membership_id: m.id,
+                role_id: owner.id,
+                resource_type: "ORG",
+                resource_id: null,
+              },
+            });
+            await this.event(
+              tx,
+              "OrganizationCreated",
+              "organization",
+              org.id,
+              {
+                organization_id: org.id,
+                slug: org.slug,
+                created_by: actor,
+              },
+            );
+            await this.membershipEvent(tx, m.id, "CREATED");
+            return { status: 201, body: { organization_id: org.id } };
+          },
+        ))!;
+      } catch (e) {
+        if ((e as { code?: string }).code === "P2002") {
+          if (dto.slug !== undefined)
+            fail(409, "SLUG_TAKEN", "Slug already used");
+          if (attempt < 4) continue;
+          fail(
+            409,
+            "CONFLICT",
+            "Unable to allocate slug; retry with the same key",
+          );
+        }
+        throw e;
+      }
     }
+    throw new Error("Slug allocation attempts exhausted");
   }
   async verifyEvents(org: string, roles: Assignment[]) {
     if (!this.resolver)

@@ -1,5 +1,7 @@
 # Theo dõi bàn giao Identity và Gateway cho các service
 
+Cập nhật 15/11/2026: HTTP Identity/Gateway hiện tại1.3.0, CreateOrganization chỉ bắt buộc name, slug input tùy chọn; Identity tự sinh và xử lý collision, explicit slug vẫn tương thích1.2.0. Nguồn: ADR0006/canonical/[evidence](../../services/identity-service/report/REPORT_ORGANIZATION_AUTO_SLUG_01.md). Mapping P8 ghi1.2.0 bên dưới là baseline trước thay đổi này. Frontend có thể bỏ field slug khỏi request; không dùng generated slug làm input hash idempotency, giữ nguyên key/body khi retry.
+
 Ngày khởi tạo: 13/11/2026 (Asia/Saigon). Nguồn: [kế hoạch Identity/Gateway](../../services/identity-service/MASTER_PLAN.md), [review F13](../../services/identity-service/report/REVIEW_MASTER_PLAN01.md).
 
 Cập nhật P8 — 14/11/2026: gói chuẩn bị bàn giao và mapping hiện tại ở §7–§10; [báo cáo P8](../../services/identity-service/report/REPORT_P8_INTEGRATION_HANDOFF_01.md) là nguồn bằng chứng chạy mới. Các run P7/M2 bên dưới giữ nguyên là lịch sử. H01/H02 có thể bàn giao độc lập; H03 chỉ interface ACCEPTED và [HTTP DRAFT 0.1.0](../../shared/contracts/http/event-context.draft.openapi.json), chưa adapter/provider thật hoặc acceptance M4. Không gán reviewer bên nhận hay hạn hẹn khi chưa biết.

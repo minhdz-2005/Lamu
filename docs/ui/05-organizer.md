@@ -4,6 +4,8 @@
 
 Mục tiêu: đủ để tự chứng minh đường thẳng đứng demo — tạo event, mở bán, thêm loại vé, rồi đứng ở cửa check-in khách. Một trang, ba tab, không có sidebar quản trị.
 
+Ghi chú M4 Gateway/Identity: trang này vẫn phụ thuộc Event/Registration nên chưa là trang đích tích hợp Identity thật. Tổ chức/members/invitations được đặc tả riêng ở [07](07-organizations.md), [08](08-organization-detail.md), [09](09-my-invitations.md), sau login dùng [06 Tài khoản](06-account.md). Phạm vi MUST/STRETCH bên dưới lưu lộ trình business ban đầu; không dùng mock roles để giả authorization EVENT đã tích hợp.
+
 Không làm ở MUST (STRETCH): sửa event đã publish, đổi giờ, quản lý thành viên/role, dashboard số liệu, QR.
 
 ## 1. Guard và chọn tổ chức

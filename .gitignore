@@ -24,3 +24,7 @@ http-client.private.env.json
 *.log
 .DS_Store
 Thumbs.db
+
+# Stitch design downloads and local metadata
+/.stitch/
+/frontend/.stitch/
