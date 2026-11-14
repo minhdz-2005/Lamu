@@ -1,7 +1,7 @@
 name: lumasoa
 services:
   identity-migrate:
-    profiles: [m1]
+    profiles: [m1, m3]
     build:
       context: .
       dockerfile: services/identity-service/Dockerfile
@@ -15,7 +15,7 @@ services:
     networks: [backend]
     restart: "no"
   identity-service:
-    profiles: [m1]
+    profiles: [m1, m3]
     build:
       context: .
       dockerfile: services/identity-service/Dockerfile
@@ -36,7 +36,7 @@ services:
       retries: 15
     networks: [backend]
   gateway:
-    profiles: [m1]
+    profiles: [m1, m3]
     build:
       context: .
       dockerfile: gateway/Dockerfile
@@ -123,17 +123,36 @@ services:
       retries: 10
     networks: [backend]
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4.4.0-management-alpine@sha256:598b474e2511f37a7408f3fa580f002684638f4ad6401395102b51e3209a9a51
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-luma}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local_dev_only}
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
     ports:
-      - "15672:15672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks: [backend]
+
+  identity-worker:
+    profiles: [m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    command: ["node", "services/identity-service/dist/messaging/main.js"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      RABBITMQ_USER: ${RABBITMQ_USER:-luma}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-local_dev_only}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
     networks: [backend]
 
 # M1: docker compose --profile m1 up --build gateway
@@ -142,6 +161,7 @@ networks:
   backend:
     driver: bridge
 volumes:
+  rabbitmq-data:
   identity-data:
   event-data:
   registration-data:

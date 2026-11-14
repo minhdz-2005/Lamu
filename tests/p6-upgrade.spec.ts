@@ -15,7 +15,21 @@ describe("P6 additive upgrade preserves M1/P5 evidence and state", () => {
   });
   afterAll(async () => {
     await db?.end();
-    await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    for (let n = 0; n < 100; n++) {
+      if (
+        Number(
+          (
+            await admin.query(
+              "SELECT count(*) FROM pg_stat_activity WHERE datname=$1",
+              [name],
+            )
+          ).rows[0].count,
+        ) === 0
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await admin.query(`DROP DATABASE "${name}"`);
     await admin.end();
   });
   it("keeps users/sessions/org/roles/idempotency/revision/backlog byte-equivalent apart from nullable invitation metadata", async () => {

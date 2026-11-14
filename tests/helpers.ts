@@ -33,6 +33,28 @@ export const registration = () => ({
   password: "RealPassword!2026",
   display_name: " Test User ",
 });
+// Persistence may gain delivery metadata; the event boundary remains explicit.
+export function storedEnvelope(row: {
+  event_id: string;
+  event_type: string;
+  version: number;
+  occurred_at: Date;
+  aggregate_type: string;
+  aggregate_id: string;
+  producer: string;
+  payload: unknown;
+}) {
+  return {
+    event_id: row.event_id,
+    event_type: row.event_type,
+    version: row.version,
+    occurred_at: row.occurred_at.toISOString(),
+    aggregate_type: row.aggregate_type,
+    aggregate_id: row.aggregate_id,
+    producer: row.producer,
+    payload: row.payload,
+  };
+}
 const doc = JSON.parse(
   fs.readFileSync("shared/contracts/http/identity.openapi.json", "utf8"),
 );

@@ -8,15 +8,20 @@
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "worker": "node dist/messaging/main.js",
+    "outbox:replay": "node dist/messaging/replay.js"
   },
   "dependencies": {
     "@lamu/runtime": "0.1.0",
     "@nestjs/common": "11.2.10",
     "@nestjs/core": "11.2.10",
     "@nestjs/platform-express": "11.2.10",
-    "@prisma/client": "7.10.1",
     "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "amqplib": "2.3.1",
     "argon2": "0.45.2",
     "class-transformer": "0.5.1",
     "class-validator": "0.14.3",

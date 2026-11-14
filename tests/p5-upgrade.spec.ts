@@ -9,6 +9,25 @@ import { config } from "./helpers";
 describe("P5 additive migration on an existing M1 database", () => {
   const admin = new Pool({ connectionString: process.env.DATABASE_URL });
   const name = "p5_upgrade_" + randomUUID().replaceAll("-", "");
+  async function dropClosed(target: string) {
+    if (!/^p5_upgrade_[a-f0-9]{32}(_clean)?$/.test(target))
+      throw Error("Unsafe test DB");
+    for (let n = 0; n < 100; n++) {
+      if (
+        Number(
+          (
+            await admin.query(
+              "SELECT count(*) FROM pg_stat_activity WHERE datname=$1",
+              [target],
+            )
+          ).rows[0].count,
+        ) === 0
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await admin.query(`DROP DATABASE IF EXISTS "${target}"`);
+  }
   let db: Pool;
   beforeAll(async () => {
     if (!/^p5_upgrade_[a-f0-9]{32}$/.test(name))
@@ -20,7 +39,7 @@ describe("P5 additive migration on an existing M1 database", () => {
   });
   afterAll(async () => {
     await db?.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+    await dropClosed(name);
     await admin.end();
   });
   it("creates an organization on a migrated empty DB without requiring local demo seed", async () => {
@@ -81,7 +100,7 @@ describe("P5 additive migration on an existing M1 database", () => {
       await app?.close();
       await client.$disconnect();
       await pool.end();
-      await admin.query(`DROP DATABASE "${cleanName}" WITH (FORCE)`);
+      await dropClosed(cleanName);
     }
   });
   it("preserves IDs/hashes/sessions/org/roles/pending M1 backlog and adds constraints without reset", async () => {

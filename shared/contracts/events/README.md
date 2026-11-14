@@ -33,13 +33,17 @@ Quy tắc: `message_id` trên broker chính là `event_id` envelope, nên consum
 
 Nguồn schema JSON là thư mục này; tên queue và routing key ghi trong `docs/api/messaging.md` khi freeze hợp đồng.
 
+M3 A–E đã được người dùng xác nhận riêng ngày 14/11/2026: [messaging v1](../../../docs/api/messaging.md), [ADR 0005](../../../docs/adr/0005-m3-outbox-delivery.md). `lamu.events` topic/durable, queue local `identity.m3.delivery.v1` durable/classic; ba routing key theo messaging authority. Worker giữ envelope/payload/revision outbox gốc, messageId=event_id, persistent/mandatory/confirm; return+ACK không SENT. SENT chỉ xác nhận route tới ít nhất một queue, delivery queue đích cần evidence riêng. Schema/trigger v1 giữ nguyên; không consumer MUST mới. [Evidence P7](../../../services/identity-service/report/REPORT_M3_P7_OUTBOX_DELIVERY_01.md) ghi từng gate, không dùng producer tests làm proof delivery.
+
 ## UserRegistered v1 — M1
 
 Ngày 13/11/2026, người dùng đã chốt đề xuất P0 M1 theo [ADR 0002](../../../docs/adr/0002-m1-auth-gateway.md). Schema chuẩn là [user-registered.v1.schema.json](user-registered.v1.schema.json), fixture tổng hợp tại [fixtures/user-registered.v1.json](fixtures/user-registered.v1.json). Producer Identity, consumer MUST hiện chưa có. `aggregate_type=user`, aggregate_id bằng payload.user_id; event_id và occurred_at được sinh một lần rồi lưu cùng user trong transaction. Không có credential trong event. JSON Schema kiểm shape; producer test kiểm thêm quan hệ aggregate_id/user_id. Seed demo không phát event. Worker RabbitMQ M3 sẽ gửi backlog đã lưu; M1 không tạo queue/consumer hoặc hứa delivery broker đã được kiểm chứng.
 
 <a id="membership-changed-f10"></a>
 
-## MembershipChanged v1: P5 đã duyệt, delivery M3 chưa triển khai
+## MembershipChanged v1: P5 đã duyệt, delivery M3 đã triển khai
+
+Cập nhật P8 14/11/2026: mô tả producer dưới đây giữ lịch sử P5/P6; delivery hiện theo [messaging v1](../../../docs/api/messaging.md), bằng chứng mới tại [P8](../../../services/identity-service/report/REPORT_P8_INTEGRATION_HANDOFF_01.md). Consumer nghiệp vụ M4 chưa tích hợp.
 
 **Cập nhật 14/11/2026 — người dùng chốt A–E/P0 M2 cho P5, theo [ADR 0003](../../../docs/adr/0003-m2-p5-organization-rbac.md).** Schema canonical máy kiểm được: [OrganizationCreated v1](organization-created.v1.schema.json), [MembershipChanged v1](membership-changed.v1.schema.json), fixture tổng hợp trong fixtures/. Payload runtime không lấy từ ví dụ Markdown. Giao nhận broker/consumer projection M3 và Event thật M4 vẫn NOT RUN; không suy đã có consumer review/integration. Tham chiếu [review F10](../../../services/identity-service/report/REVIEW_MASTER_PLAN01.md#f10). Bổ sung này làm rõ dòng MembershipChanged trong bảng; không thay shape của 13 event còn lại hoặc OpenAPI `/users/me`. Producer/consumer không tự suy payload mới đã được phê duyệt từ tên event cũ.
 
@@ -148,7 +152,7 @@ Chưa thay các event Identity khác hoặc bổ sung event lifecycle ngoài ph�
 
 ## Phối hợp Identity–Event: xử lý F05
 
-**Trạng thái: ghi chú bàn giao và contract đề xuất, chưa triển khai/chưa freeze.** Nguồn: [MASTER_PLAN.md §7.2 và M4](../../../services/identity-service/MASTER_PLAN.md), [review F05](../../../services/identity-service/report/REVIEW_MASTER_PLAN01.md#f05). Mục này được đặt tại đây để người làm Event Service nhận biết phụ thuộc tích hợp. Nó mô tả truy vấn REST nội bộ phục vụ gán role EVENT, không thêm domain event, consumer hoặc thay đổi payload trong bảng trên.
+**Cập nhật P8 14/11/2026: interface/fixture P5/P6 ACCEPTED; HTTP resolver DRAFT 0.1.0, provider/adapter thật chưa triển khai/chưa freeze.** Nguồn: [MASTER_PLAN.md §7.2 và M4](../../../services/identity-service/MASTER_PLAN.md), [review F05](../../../services/identity-service/report/REVIEW_MASTER_PLAN01.md#f05). Authority HTTP đề xuất duy nhất là [Event resolver OpenAPI DRAFT](../http/event-context.draft.openapi.json); quyết định/timeout/mapping/lifecycle còn chờ xác nhận tại [handoff §9](../../../docs/integration/identity-handoff.md#d09-draft). Không thêm domain event, consumer hoặc thay đổi payload trong bảng trên.
 
 ### Vấn đề cần phối hợp
 
@@ -163,19 +167,7 @@ Identity sở hữu membership/role; Event Service sở hữu event và quan h�
 
 ### API nội bộ Event đề xuất
 
-```http
-GET /internal/events/{eventId}/authorization-context
-```
-
-- `eventId`: UUID bắt buộc, Event kiểm tra định dạng.
-- `200`: `{event_id, organization_id}`, cả hai là UUID string; `event_id` phải trùng ID được yêu cầu. Chỉ trả metadata cần thiết, không kèm token hoặc thông tin người mua.
-- `400 VALIDATION_FAILED`: event ID sai định dạng; `404 NOT_FOUND`: không tồn tại; lỗi dịch vụ dùng envelope `{error: {code, message, request_id}}` theo catalog.
-- Identity phân biệt response không hợp lệ, không tìm thấy và timeout; chỉ coi xác minh thành công khi response hợp lệ và org khớp org đích.
-- API chỉ dành cho service nội bộ được phép; không thêm public route ở Gateway. Local giữ mô hình network tin cậy đã chọn; khi triển khai ngoài local phải thống nhất xác thực service-to-service. Có request ID, timeout hữu hạn và không log token.
-- Handler đọc event từ database Event và trả metadata, **không gọi lại authorization/check của Identity**. Nếu gọi ngược để bảo vệ chính resolver này sẽ tạo vòng Identity → Event → Identity; quyền gọi service nội bộ cần cơ chế riêng theo trust model đã chốt.
-- API này chỉ xác nhận quan hệ event/org; không trả quyết định `allowed` thay Identity. Event Service khi xử lý API nghiệp vụ vẫn resolve org từ tài nguyên thật rồi gọi Identity check với user, permission và scope tương ứng.
-
-Tên endpoint và các error code mới ở review là đề xuất; người làm hai service phải cập nhật [API catalog](../../../docs/api/catalog.md) và OpenAPI khi chốt, không triển khai khác nhau dựa trên suy đoán. Nếu cần EVENT assignment thật ngay M2, cập nhật mốc và dependency được chấp nhận trước khi kéo phần M4 lên.
+Method/path/request/response/UUID/errors, metadata cho DRAFT, local trust boundary và timeout/mapping đề xuất nằm trong [OpenAPI DRAFT](../http/event-context.draft.openapi.json). Types/example được derive từ artifact, kiểm bằng `node scripts/check-event-context-draft.cjs`; không duy trì bản payload riêng trong Markdown. [Handoff §9](../../../docs/integration/identity-handoff.md#d09-draft) ghi ảnh hưởng tương thích, quyết định cần xác nhận và lifecycle còn mở. Handler Event không gọi ngược Identity; caller business phải resolve resource/org đáng tin trước Identity authorization/check. Không đọc chéo DB, không fallback fixture khi Event lỗi. Chưa xác nhận thì giữ DRAFT, không triển khai adapter/provider phụ thuộc.
 
 ### Event payload không thay thế resolver hiện tại
 

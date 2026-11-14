@@ -11,3 +11,5 @@ HTTP canonical: [Identity OpenAPI v1.1.0](../../shared/contracts/http/identity.o
 - D09 chỉ chốt interface P5: fixture resolver tiêm tường minh từ test; default runtime thiếu resolver trả 409 EVENT_SCOPE_UNVERIFIED cho mutation EVENT. Resolve ngoài transaction, kiểm lại quyền local sau đó; replay success không resolve lại. Không freeze/implement HTTP adapter, URL/timeout/lifecycle Event M4; không fallback fixture hoặc gọi vòng.
 
 Phê duyệt contract không phải test PASS. Bằng chứng provider ORG thật/Event fixture, transaction/race/coverage và giới hạn ở [báo cáo P5](../../services/identity-service/report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md).
+
+Cập nhật P8 14/11/2026, không thay quyết định P5: [HTTP Event resolver 0.1.0 DRAFT](../../shared/contracts/http/event-context.draft.openapi.json) đã có artifact/types/checks đề xuất; [D09/handoff](../integration/identity-handoff.md#d09-draft) ghi timeout/mapping/trust/lifecycle cần xác nhận trước M4. Interface/fixture vẫn ACCEPTED, HTTP provider/adapter thật NOT_STARTED; tạo draft không tự nâng ACCEPTED. Manual M2 về sau USER-CONFIRMED theo báo cáo nghiệm thu; kết quả NOT RUN ở thời điểm ADR ban đầu giữ là lịch sử.

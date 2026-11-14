@@ -4,7 +4,13 @@ import { verify as verifyJwt } from "jsonwebtoken";
 import Ajv from "ajv";
 import formats from "ajv-formats";
 import fs from "node:fs";
-import { pair, registration, contract, config } from "./helpers";
+import {
+  pair,
+  registration,
+  contract,
+  config,
+  storedEnvelope,
+} from "./helpers";
 describe("P2 Identity and Gateway register/login with real PostgreSQL", () => {
   let p: Awaited<ReturnType<typeof pair>>;
   beforeAll(async () => {
@@ -32,8 +38,7 @@ describe("P2 Identity and Gateway register/login with real PostgreSQL", () => {
       const row = await p.db.outboxEvent.findFirstOrThrow({
         where: { aggregate_id: user.id },
       });
-      const { status: _status, ...stored } = row;
-      const event = { ...stored, occurred_at: row.occurred_at.toISOString() };
+      const event = storedEnvelope(row);
       const ajv = new Ajv();
       formats(ajv);
       expect(

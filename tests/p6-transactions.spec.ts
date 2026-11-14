@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import { pair, contract } from "./helpers";
+import { pair, contract, storedEnvelope } from "./helpers";
 import { fixture, orgRole, type Pair } from "./p6-helpers";
 import { OrganizationsService } from "../services/identity-service/src/modules/organizations/organizations.service";
 import { fail } from "@lamu/runtime";
@@ -119,7 +119,7 @@ describe("P6 PostgreSQL transaction, replay, expiry and Event fixture", () => {
     });
     const ajv = new Ajv();
     formats(ajv);
-    const { status, ...envelope } = event;
+    const envelope = storedEnvelope(event);
     expect(
       ajv.compile(
         JSON.parse(
@@ -128,7 +128,7 @@ describe("P6 PostgreSQL transaction, replay, expiry and Event fixture", () => {
             "utf8",
           ),
         ),
-      )({ ...envelope, occurred_at: event.occurred_at.toISOString() }),
+      )(envelope),
     ).toBe(true);
     // Change the recipient's roles through the real P5 API, then demote inviter.
     const orgService = p.identity.get(OrganizationsService);

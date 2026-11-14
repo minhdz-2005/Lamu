@@ -2,6 +2,8 @@
 
 Cổng truy cập duy nhất cho frontend: xác thực JWT, định tuyến, rate limit và API Composition. Gateway không sở hữu dữ liệu nghiệp vụ.
 
+Cập nhật P8 14/11/2026: implementation hiện proxy allowlist **Identity HTTP1.2.0**; API Composition/Event/Registration/Payment/Notification trong kiến trúc chưa có route thật ở Gateway. [Báo cáo P8](../services/identity-service/report/REPORT_P8_INTEGRATION_HANDOFF_01.md) có lượt kiểm chứng mới, [handoff](../docs/integration/identity-handoff.md) có mapping browser/logout/H01–H05. Frontend default `/api` hiện vẫn Next mock; chọn Gateway base có `/api` đúng một lần và chốt same-origin/CORS/transport trước M4. P8 không sửa frontend hoặc bật CORS. Event resolver [DRAFT](../shared/contracts/http/event-context.draft.openapi.json) không thuộc projection public.
+
 P5 thêm allowlist POST/GET organizations, GET members, PUT member roles và GET public organization; route protected dùng cùng JwtGuard M1. Chỉ mutation P5 forward một Idempotency-Key hợp lệ; query pagination giữ nguyên cho Identity validate. Hai endpoint `/internal/` chỉ ở Identity, bị loại khỏi projection Swagger và không có route Gateway. [ADR 0003](../docs/adr/0003-m2-p5-organization-rbac.md) và canonical HTTP v1.1.0 ghi contract được duyệt; P6 được triển khai riêng theo ADR 0004 và canonical v1.2.0.
 
 M1 có register/login/refresh/logout và `/api/users/me`; API Composition và các route service nghiệp vụ chưa thuộc M1. Xem [runbook Identity/Gateway](../services/identity-service/README.md) cho cấu hình/chạy/test.

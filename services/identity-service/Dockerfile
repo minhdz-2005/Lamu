@@ -25,6 +25,7 @@ COPY --from=build /app/services/identity-service/dist services/identity-service/
 COPY --from=build /app/services/identity-service/package.json services/identity-service/package.json
 COPY --from=build /app/shared/libraries/runtime/dist shared/libraries/runtime/dist
 COPY --from=build /app/shared/libraries/runtime/package.json shared/libraries/runtime/package.json
+COPY --from=build /app/shared/contracts/events shared/contracts/events
 ENV NODE_ENV=production PORT=8080
 USER node
 CMD ["node","services/identity-service/dist/main.js"]

@@ -145,7 +145,39 @@ model OutboxEvent {
  producer String
  payload Json
  status String @default("PENDING")
+ attempt_count Int @default(0)
+ next_attempt_at DateTime @default(now()) @db.Timestamptz(6)
+ claim_token String? @db.Uuid
+ lease_until DateTime? @db.Timestamptz(6)
+ last_attempt_at DateTime? @db.Timestamptz(6)
+ sent_at DateTime? @db.Timestamptz(6)
+ last_error_code String? @db.VarChar(64)
+ parked_at DateTime? @db.Timestamptz(6)
+ delivery_attempts OutboxDeliveryAttempt[]
+ replays OutboxReplay[]
  @@index([status,occurred_at])
  @@map("outbox_events")
+}
+
+model OutboxDeliveryAttempt {
+ claim_token String @id @db.Uuid
+ event_id String @db.Uuid
+ attempt_number Int
+ started_at DateTime @db.Timestamptz(6)
+ finished_at DateTime? @db.Timestamptz(6)
+ outcome String? @db.VarChar(64)
+ event OutboxEvent @relation(fields:[event_id],references:[event_id],onDelete:Restrict,onUpdate:NoAction)
+ @@index([event_id,started_at],map:"outbox_delivery_attempts_event_idx")
+ @@map("outbox_delivery_attempts")
+}
+
+model OutboxReplay {
+ id String @id @db.Uuid
+ event_id String @db.Uuid
+ replayed_at DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(6)
+ reason String @db.VarChar(256)
+ previous_attempt_count Int
+ event OutboxEvent @relation(fields:[event_id],references:[event_id],onDelete:Restrict,onUpdate:NoAction)
+ @@map("outbox_replays")
 }
 

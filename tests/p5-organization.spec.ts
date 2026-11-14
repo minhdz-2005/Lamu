@@ -1,6 +1,6 @@
 import request from "supertest";
 import { randomUUID } from "node:crypto";
-import { pair, registration, contract } from "./helpers";
+import { pair, registration, contract, storedEnvelope } from "./helpers";
 import { Pool } from "pg";
 import Ajv from "ajv";
 import formats from "ajv-formats";
@@ -113,7 +113,7 @@ describe("P5 real PostgreSQL organization API and RBAC", () => {
         row.event_type === "OrganizationCreated"
           ? "organization-created"
           : "membership-changed";
-      const { status, ...event } = row;
+      const event = storedEnvelope(row);
       expect(
         ajv.compile(
           JSON.parse(
@@ -122,7 +122,7 @@ describe("P5 real PostgreSQL organization API and RBAC", () => {
               "utf8",
             ),
           ),
-        )({ ...event, occurred_at: event.occurred_at.toISOString() }),
+        )(event),
       ).toBe(true);
       expect(row.aggregate_id).toBe(
         (row.payload as any)[

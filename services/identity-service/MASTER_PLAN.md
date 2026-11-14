@@ -2,7 +2,13 @@
 
 Trạng thái cập nhật 14/11/2026: **M2 COMPLETE / ACCEPTED: P5/P6 đã triển khai, gate tự động PASS và manual Swagger/DOC-01 PASS theo xác nhận người dùng**. Ngày lập kế hoạch gốc: 12/11/2026.
 
+**P8 COMPLETE — chuẩn bị bàn giao, 14/11/2026:** [báo cáo P8](report/REPORT_P8_INTEGRATION_HANDOFF_01.md) ghi lượt mới full127/127, coverage, broker/lifecycle/Compose và target Compose P6; mapping API/event/frontend và H01–H05 ở [handoff §7–§10](../../docs/integration/identity-handoff.md). [Event HTTP resolver 0.1.0 DRAFT](../../shared/contracts/http/event-context.draft.openapi.json) máy kiểm được, không ACCEPTED/không adapter/provider thật. M4 NOT_STARTED; chờ chốt D09, browser/nhiều tab và owner/reviewer bên nhận. Không commit hoặc sửa frontend.
+
+**M3/P7 COMPLETE trong phạm vi local A–E đã duyệt:** full127 tests/broker thật/lifecycle PASS và Compose offline/reconnect/shutdown PASS; [báo cáo P7](report/REPORT_M3_P7_OUTBOX_DELIVERY_01.md). Contract A–E ACCEPTED theo xác nhận riêng người dùng; không tự gán nghiệm thu consumer M4 hoặc manual M3. Không commit.
+
 Tiến độ hiện tại: [P5](report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md), [P6 contract](report/REPORT_M2_P6_CONTRACT_01.md), [P6 evidence](report/REPORT_M2_P6_INVITATION_01.md), ADR 0003/0004. Người dùng duyệt riêng toàn bộ A–E P6 ngày 14/11/2026. Những đoạn “đề xuất/chưa triển khai/NOT RUN” trong nội dung revision 2 bên dưới lưu baseline kế hoạch; đọc cùng báo cáo theo từng gate, không dùng thay evidence mới. Manual được người dùng xác nhận riêng sau khi tái hiện hướng dẫn; xem [nghiệm thu M2](report/REPORT_M2_ACCEPTANCE_01.md). Không nâng Event thật/worker từ kết quả M2.
+
+P7/M3 ngày 14/11/2026: người dùng xác nhận riêng toàn bộ A–E trong [M3/P0](report/REPORT_M3_P0_MESSAGING_CONTRACT_01.md), D10/D11/delivery D12 ACCEPTED theo ADR0005/[messaging v1](../../docs/api/messaging.md). Worker/migration/audit/replay/storage đã triển khai; regression127 và RabbitMQ thật/lifecycle có evidence. Trạng thái gate cuối ở [báo cáo P7](report/REPORT_M3_P7_OUTBOX_DELIVERY_01.md); không thay acceptance M2 hoặc mở phạm vi M4.
 
 Revision 2 — 13/11/2026: tích hợp F01–F14 từ review vào thiết kế và nghiệm thu. Chỉ cập nhật kế hoạch; toàn bộ kiểm chứng runtime vẫn **NOT RUN**. Không suy phát hiện đã đóng từ việc sửa tài liệu.
 
@@ -23,7 +29,7 @@ Tài liệu tổng hợp quyết định trong phiên trao đổi và mô tả t
 
 Quyết định người dùng đã chốt được ưu tiên khi khác tài liệu cũ. Các lựa chọn ghi **đề xuất kỹ thuật** là phương án để review, chưa tự trở thành contract được duyệt. Phải đóng quyết định ảnh hưởng trước công đoạn phụ thuộc; không cần đóng mọi quyết định M4 trước M1. Checklist là công việc tương lai; chưa có mục nào được tính là đã nghiệm thu.
 
-Catalog hiện còn khác kế hoạch về header phiên, idempotency auth, field authorization tùy chọn và invitation STRETCH/user chưa đăng ký. Kiến trúc còn mô tả tám bảng và lộ trình tuần; bổ sung outbox M1/lời mời M2 ở đây không tự đồng bộ các tài liệu đó. Phiên này chỉ sửa kế hoạch: P0 của từng mốc phải đồng bộ catalog/ADR/spec liên quan trước freeze. Event contract F05/F10 vẫn là draft. Handoff D04 còn ghi “kế hoạch cần đồng bộ” là trạng thái trước revision này; phần kế hoạch đã cập nhật, catalog và bằng chứng vẫn còn thiếu, chưa nâng trạng thái tracker.
+**Baseline revision 2 trước implementation (giữ lịch sử):** catalog khi đó còn khác header phiên/idempotency/authorization/invitation; F05/F10 còn draft và D04 chưa có evidence. Cập nhật P8 14/11/2026: M1/P5/P6/M3 đã đồng bộ HTTP canonical1.2.0, ba schema Identity v1 và messaging v1/ADR0002–0005. F10 producer/delivery đã được duyệt, F05 chỉ interface được duyệt; HTTP/lifecycle M4 vẫn DRAFT. Đọc trạng thái hiện tại ở đầu file/handoff/P8, không dùng baseline này thay evidence mới.
 
 ## 2. Quyết định và phạm vi
 
@@ -372,15 +378,17 @@ Gate tự động P6: xem báo cáo P6 (PostgreSQL/coverage/Compose). **M2 đã 
 
 ### P7 — Worker outbox và delivery event Identity, bàn giao M3
 
-- [ ] Kiểm tương thích JSON Schema đã freeze trước ghi M1/M2 với backlog hiện có; thiếu schema/bằng chứng validation là khoảng trống phải xử lý trước gate, không coi M3 là mốc lần đầu định nghĩa shape hoặc dựng lại payload cũ từ DB hiện tại.
-- [ ] Worker gửi backlog/event mới; giữ event ID, payload, occurred_at và revision gốc. Kiểm transaction mutation/outbox đã có từ M1/M2, không chuyển thời điểm bảo đảm sang M3.
-- [ ] Đề xuất exchange durable `lamu.events`, topic routing `identity.user.registered.v1`, `identity.organization.created.v1`, `identity.membership.changed.v1`; cập nhật messaging contract trước triển khai.
-- [ ] `message_id = event_id`; persistent message; chấp nhận at-least-once, consumer tương lai phải dedupe.
-- [ ] Khi chưa có consumer thật, dùng queue kiểm thử durable để xác minh delivery/replay; không coi exchange lưu message khi không có queue bind.
-- [ ] Thêm event lời mời chỉ khi có nhu cầu tích hợp Notification; không tự giả định event đó đã thuộc catalog cũ.
-- [ ] Test broker ngừng/chạy lại, publish rồi crash trước đánh dấu sent, message trùng, không mất sự kiện đã commit.
+- [x] JSON Schema v1 giữ nguyên; validate backlog trước publish, không dựng snapshot từ DB nghiệp vụ hiện tại.
+- [x] Worker gửi backlog/event mới, giữ event ID/payload/occurred_at microseconds/revision gốc; transaction mutation/outbox M1/M2 giữ nguyên.
+- [x] Chốt exchange/routing/queue tại messaging v1 và ADR0005 trước implementation phụ thuộc.
+- [x] `message_id = event_id`, persistent/mandatory/confirm theo attempt; at-least-once, consumer tương lai cần dedupe.
+- [x] Queue local durable và queue lifecycle test riêng; verify đúng queue, không coi exchange lưu message hoặc ACK chứng minh mọi queue đích nhận.
+- [x] Không thêm invitation event/Notification/email vì chưa có nhu cầu tích hợp được duyệt trong M3.
+- [x] Broker retry/reconnect/crash/duplicate/lease/stale owner/DB finalize failure và restart/recreate/down-up có evidence riêng; xem P7 cho gate Compose/API offline và coverage cuối.
 
 Gate: có bằng chứng publish và retry, schema validation, tài liệu queue/routing; không tuyên bố có Notification thật.
+
+Cập nhật M3: các đoạn “đề xuất/còn mở” F08–F10 bên dưới lưu baseline revision2. Quyết định delivery/storage đã được thay bằng ADR0005 và messaging v1 sau xác nhận A–E; dùng P7 cho evidence actual. Consumer projection vẫn tương lai, không phải gate có consumer thật của M3.
 
 **F08/D10 — thiết kế delivery đề xuất cần freeze trước worker:** confirm channel + persistent + `mandatory: true`; đăng ký return/confirm/channel error trước publish. Tương quan từng attempt bằng event ID, channel sequence và return correlation; không dùng biến return toàn cục. Chỉ mark SENT khi cùng attempt ACK, không return theo thứ tự protocol/library đã kiểm chứng và topology đúng. Return dù sau đó ACK, NACK, channel error, timeout/mất kết nối đều không SENT; retry/backoff giữ ID. Không dùng timer tùy ý để suy không return, không nhầm publisher confirm với consumer ACK.
 
@@ -392,12 +400,14 @@ Mark SENT bằng transaction DB ngắn có điều kiện ownership attempt/clai
 
 ### P8 — Chuẩn bị tích hợp và đánh giá toàn phần
 
-- [ ] Đối chiếu toàn bộ API/schema với catalog, kiến trúc, event contracts và Swagger.
-- [ ] Review phần trùng mock: ghi khác biệt và hướng chuyển frontend sang Gateway ở mốc sau.
-- [ ] Chuẩn bị contract cho Event xác minh event/org và kiểm tra permission; chốt cách resolve resource tin cậy.
-- [ ] Tổng hợp kết quả từng mốc, lỗi tồn đọng, giới hạn và hướng dẫn chạy lại.
-- [ ] M4 chỉ bắt đầu trong công đoạn tích hợp sau; không coi chuẩn bị contract là E2E với các service chưa tồn tại.
-- [ ] Bàn giao H01/H02 ngay khi phần tương ứng đã freeze/kiểm chứng, không bắt Event chờ worker M3; H03 chuẩn bị interface/stub sớm, provider thật vẫn M4. Theo dõi tại handoff, không tự gán M1–M4 thành tuần 1–4.
+- [x] Đối chiếu API/schema với catalog, kiến trúc, event contracts và Swagger; ma trận implementation/test/consumer ở handoff §7.
+- [x] Review mock/API client/session/logout, ghi mapping/checklist M4 ở handoff §8; không sửa frontend.
+- [x] Chuẩn bị Event resolver OpenAPI/types/checks DRAFT, nguồn event/org đáng tin và đề xuất D09 ở handoff §9. **Freeze HTTP/timeout/lifecycle còn chờ người dùng và bên nhận trước implementation M4**; không tự đánh ACCEPTED.
+- [x] Tổng hợp mốc/evidence mới/giới hạn/runbook trong báo cáo P8 và handoff §10.
+- [x] M4 giữ NOT_STARTED; Event thật/frontend/business consumer NOT RUN, không suy E2E từ contract/fixture.
+- [x] H01/H02 sẵn gói bàn giao độc lập; H03 interface/fixture đã có, HTTP DRAFT/provider thật vẫn M4; H04/H05 có bằng chứng mới. Consumer acceptance/owner/reviewer chưa gán là dependency rõ ở handoff, không tự đặt lịch.
+
+Gate P8 hoàn thành **đầu ra chuẩn bị** theo [REPORT_P8_INTEGRATION_HANDOFF_01.md](report/REPORT_P8_INTEGRATION_HANDOFF_01.md), không phải nghiệm thu consumer M4. Manual M2 giữ PASS — USER-CONFIRMED, Codex không trực tiếp chạy Swagger manual trong P8.
 
 **Tác vụ M4/F12 cần bàn giao:** frontend hiện logout anonymous, khác hợp đồng M1. Khi tích hợp, sửa useSession/apiClient/auth và cache/profile, mock/UI docs/contract test để logout gửi access + refresh hiện hành cùng phiên. Dùng session coordinator: logging-out/single-flight, chặn tác vụ mới, chờ refresh đang chạy trong timeout hữu hạn rồi lấy cặp mới; access hết hạn thì refresh tối đa một lần và retry logout tối đa một lần. Không auto-refresh đệ quy mọi auth endpoint. Generation guard ngăn response token/profile cũ hồi sinh phiên sau cleanup; nhiều tab cần chính sách/kiểm thử riêng, một promise không giải quyết liên tab.
 

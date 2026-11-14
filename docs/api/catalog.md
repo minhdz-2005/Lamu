@@ -2,6 +2,8 @@
 
 Trạng thái: **bản nháp chờ approve**. Sau khi cả nhóm approve, tài liệu này là hợp đồng: đổi API = PR có chủ service khác review.
 
+Cập nhật P8 14/11/2026: trạng thái draft chung phía trên áp dụng phần chưa duyệt của toàn hệ thống. Identity HTTP **v1.2.0** và ba event Identity **v1** đã ACCEPTED theo ADR0002–0005; authority là OpenAPI/JSON Schema, bảng này là danh mục. [Handoff P8](../integration/identity-handoff.md) có ma trận implementation/evidence/frontend và giới hạn consumer. Không suy các API Event/Registration/Payment/Notification hay composition dưới đây đã triển khai từ việc Identity PASS.
+
 Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): cột MUST là việc của 4 tuần, mục ghi STRETCH được hoãn và không cản nghiệm thu. Tám quyết định chốt tại §1.1 của tài liệu kiến trúc đã được áp vào bản API dưới đây.
 
 ## 0. Quy ước bắt buộc (áp dụng cho mọi API)
@@ -26,7 +28,7 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 
 M1 áp dụng [ADR 0002](../adr/0002-m1-auth-gateway.md). Contract HTTP máy kiểm được là [Identity OpenAPI](../../shared/contracts/http/identity.openapi.json); [Gateway OpenAPI](../../shared/contracts/http/gateway.openapi.json) là projection thêm `/api` có kiểm tra, không định nghĩa payload riêng. Người dùng đã xác nhận các đề xuất P0 trong phiên triển khai; không suy các contract M2–M4 đã được duyệt.
 
-Các quy định sau ghi đè quy ước chung cũ **chỉ cho M1**:
+ Các quy định sau ghi đè quy ước chung cũ **cho auth/context M1, tiếp tục áp dụng Identity M2/M3**:
 
 - Gateway verify HS256, issuer/audience/expiry và claims; tự gán `X-User-Id=sub`, `X-Session-Id=sid`. Không forward header danh tính client; từ chối nhiều Authorization. Identity tin context trong network local, không tự verify JWT, không publish cổng host. Public auth không nhận context client. Request ID duy nhất là UUID hợp lệ hoặc được sinh mới.
 - Register/login/refresh/logout success **200**, không yêu cầu `Idempotency-Key`. Register dựa email unique; login tạo phiên mới; refresh rotation nguyên tử; logout có retry cùng phiên. JSON token trả `expires_in:900`.
@@ -63,7 +65,7 @@ Người dùng duyệt A–E của [P0 M2](../../services/identity-service/repor
 | `GET /organizations/{orgId}/members` | Danh sách thành viên kèm role đang gán | → `{items:[{user_id,display_name,status,roles[]}],total,limit,offset}` | 403, 404 | `org.member.read` | đọc `memberships`, `membership_roles` |
 | `PUT /organizations/{orgId}/members/{userId}/roles` | Gán lại (thay thế) role cho một membership | `{roles: [{code, resource_type, resource_id}]}` → `{status: "OK"}` | 403, 404 | `org.member.manage` | ghi `membership_roles`; phát `MembershipChanged` |
 | `POST /internal/authorization/check` | Điểm chốt quyền duy nhất của hệ thống | `{user_id, organization_id, resource_type, resource_id, permission}` → `{allowed: true/false, reason}` | 400 | Nội bộ | đọc `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles` |
-| `GET /internal/users/{userId}/public-profile` | Tên + avatar, không kèm email; dùng cho API Composition | → `{id, display_name}` | 404 | Nội bộ | đọc `users` |
+| `GET /internal/users/{userId}/public-profile` | Tên công khai; chỉ id/display_name, không avatar/email; dùng cho API Composition tương lai | → `{id, display_name}` | 404 | Nội bộ | đọc `users` |
 | `GET /public/organizations/{slug}` | Trang tin công khai của ban tổ chức | → `{name, slug}` | 404 | Công khai | đọc `organizations` |
 | `POST /organizations/{orgId}/members/invitations` | M2/P6 mời user đã có tài khoản | `{email,roles[]}` → 201 `{invitation_id,status:"PENDING",expires_at}` | 400/403/404; 409 ALREADY_MEMBER/INVITATION_ALREADY_PENDING | OWNER ACTIVE đúng org | ghi invitation/idempotency, không MembershipChanged |
 | `GET /users/me/invitations` | Lời mời của tôi, mọi trạng thái | `limit/offset` → `{items,total,limit,offset}` | 400/401/403 | Self ACTIVE | đọc, effective expiry không ghi |
@@ -73,6 +75,8 @@ Người dùng duyệt A–E của [P0 M2](../../services/identity-service/repor
 | STRETCH `GET /internal/users/{userId}/contact` | Tra email theo user_id. Không dùng ở MUST vì email đã có trong payload event | | | Nội bộ | |
 
 ## 2. Event Service (`event_db`)
+
+P8/D09/F05: [Event resolver OpenAPI 0.1.0-draft](../../shared/contracts/http/event-context.draft.openapi.json) là artifact đề xuất cho truy vấn nội bộ xác minh event/org kể cả DRAFT. Không route qua Gateway hoặc Swagger public. Interface/fixture P5/P6 đã ACCEPTED riêng, HTTP/adapter/lifecycle M4 chưa duyệt/chưa triển khai. Decision/timeout/error mapping và test tích hợp cần bên nhận tại [handoff D09](../integration/identity-handoff.md#d09-draft); không copy payload riêng vào catalog.
 
 | API | Làm gì | Vào → Ra | Lỗi | Quyền | Event / bảng ghi |
 |---|---|---|---|---|---|
@@ -190,12 +194,11 @@ Shape response của `GET /api/public/events/{slug}/details` (frontend chỉ c�
 
 ## 8. Quyết định đã chốt
 
+M3 messaging Identity được duyệt riêng A–E ngày 14/11/2026 theo [ADR 0005](../adr/0005-m3-outbox-delivery.md). Delivery/topology/retry/storage authority: [messaging v1](messaging.md); payload authority tiếp tục ba JSON Schema Identity v1. SENT là broker handoff có route ít nhất một queue, không chứng minh consumer hoặc mọi queue đích đã nhận. API transaction không phụ thuộc broker; không invitation event/email/consumer MUST mới. Implementation/verification ở [P7](../../services/identity-service/report/REPORT_M3_P7_OUTBOX_DELIVERY_01.md), không suy PASS từ acceptance.
+
 Tám quyết định tại §1.1 của [docs/architecture.md](../architecture.md) đã áp vào bảng API trên: email trong payload, vé miễn phí xác nhận một bước, vé có phí chỉ confirm bằng `PaymentSucceeded`, Payment khởi động bằng event (bỏ REST ở MUST), Speaker/Attendee không có API riêng, sửa event sau PUBLISHED nhưng khóa giờ khi đã có chỗ bán, event cancel tự hoàn tiền 100%, JWT HS256.
 
-Còn đúng hai việc cần cả nhóm duyệt trước khi freeze, vì chúng đổi cả schema lẫn routing:
-
-1. Danh sách 10 permission code và 4 role seed ở §3.1.1 — Identity và Event phải dùng chung một danh sách.
-2. Tên event, routing key và queue trong `docs/api/messaging.md` (sẽ viết từ cột "Event / bảng ghi" của tài liệu này) — đặt sai tên lúc đó phải sửa cả producer lẫn consumer.
+Ghi chú lịch sử trước freeze: hai mục từng chờ là permission/role và messaging. Cập nhật P8 14/11/2026: Identity đã chốt 10 permission/4 role tại ADR0003; delivery/topology ba event Identity tại messaging v1/ADR0005. Không hỏi duyệt lại các quyết định này. Phần contract/liên kết service còn lại vẫn cần owner/consumer review riêng; đặc biệt D09 HTTP resolver/lifecycle còn DRAFT, và messaging ngoài Identity không tự được freeze từ M3.
 
 ### M2/P6 — chốt riêng 14/11/2026
 

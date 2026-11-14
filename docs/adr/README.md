@@ -7,3 +7,4 @@ Lưu các quyết định kiến trúc có ảnh hưởng dài hạn theo dạng
 
 
 - [0004 — M2/P6 Invitations](0004-m2-p6-invitations.md): ACCEPTED riêng P6; hạn 7 ngày, snapshot/replay/khóa/trigger theo gói A–E đã duyệt.
+- [0005 — M3 Outbox delivery và storage](0005-m3-outbox-delivery.md): ACCEPTED riêng M3 A–E; confirms/return/attempt fencing, lease/retry/PARKED/replay và broker storage.

@@ -20,7 +20,8 @@
     "contracts:check": "node scripts/check-contracts.cjs",
     "test:m1": "node scripts/test-db.cjs --migrate --seed --coverage",
     "test:compose": "node scripts/compose-smoke.cjs",
-    "format:check": "prettier --check \"gateway/src/**/*.ts\" services/identity-service/src/app.ts services/identity-service/src/database.ts services/identity-service/src/main.ts \"services/identity-service/src/common/**/*.ts\" \"services/identity-service/src/modules/**/*.ts\" \"shared/libraries/runtime/src/*.ts\" \"tests/**/*.ts\" \"tests/**/*.cjs\" \"scripts/*.cjs\""
+    "test:m3": "node scripts/test-m3.cjs",
+    "format:check": "prettier --check \"gateway/src/**/*.ts\" services/identity-service/src/app.ts services/identity-service/src/database.ts services/identity-service/src/main.ts \"services/identity-service/src/common/**/*.ts\" \"services/identity-service/src/modules/**/*.ts\" \"services/identity-service/src/messaging/**/*.ts\" \"shared/libraries/runtime/src/*.ts\" \"tests/**/*.ts\" \"tests/**/*.cjs\" \"scripts/*.cjs\""
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "12.1.0",
