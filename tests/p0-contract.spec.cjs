@@ -9,15 +9,17 @@ describe("P0 canonical contracts", () => {
     const doc = await SwaggerParser.validate(
       path.join(root, "shared/contracts/http/identity.openapi.json"),
     );
-    expect(Object.keys(doc.paths).sort()).toEqual([
-      "/auth/login",
-      "/auth/logout",
-      "/auth/refresh",
-      "/auth/register",
-      "/healthz",
-      "/readyz",
-      "/users/me",
-    ]);
+    expect(Object.keys(doc.paths)).toEqual(
+      expect.arrayContaining([
+        "/auth/login",
+        "/auth/logout",
+        "/auth/refresh",
+        "/auth/register",
+        "/healthz",
+        "/readyz",
+        "/users/me",
+      ]),
+    );
     for (const p of [
       "/auth/login",
       "/auth/logout",

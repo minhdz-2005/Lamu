@@ -1,18 +1,20 @@
 const fs = require("node:fs");
 function project(identity) {
   const gateway = JSON.parse(JSON.stringify(identity));
-  gateway.info.title = "Gateway M1";
+  gateway.info.title = identity.info.title.replace(/^Identity/, "Gateway");
   gateway.servers = [{ url: "http://localhost:8080" }];
   gateway.paths = Object.fromEntries(
-    Object.entries(gateway.paths).map(([path, item]) => {
-      for (const op of Object.values(item)) {
-        op.parameters = (op.parameters || []).filter(
-          (p) => !["X-User-Id", "X-Session-Id"].includes(p.name),
-        );
-        op.security = op["x-gateway-auth"] ? [{ bearerAuth: [] }] : [];
-      }
-      return [path.endsWith("z") ? path : "/api" + path, item];
-    }),
+    Object.entries(gateway.paths)
+      .filter(([path]) => !path.startsWith("/internal/"))
+      .map(([path, item]) => {
+        for (const op of Object.values(item)) {
+          op.parameters = (op.parameters || []).filter(
+            (p) => !["X-User-Id", "X-Session-Id"].includes(p.name),
+          );
+          op.security = op["x-gateway-auth"] ? [{ bearerAuth: [] }] : [];
+        }
+        return [path.endsWith("z") ? path : "/api" + path, item];
+      }),
   );
   gateway.paths["/readyz"].get.responses["200"].description = "Identity ready";
   return gateway;

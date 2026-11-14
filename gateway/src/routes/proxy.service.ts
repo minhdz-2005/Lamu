@@ -17,6 +17,23 @@ export class ProxyService {
       "content-type": "application/json",
       "x-request-id": String(res.getHeader("X-Request-Id")),
     };
+    if (
+      (req.method === "POST" && path === "/organizations") ||
+      (req.method === "POST" &&
+        (/^\/organizations\/[^/]+\/members\/invitations(?:\/[^/]+\/revoke)?$/.test(
+          path,
+        ) ||
+          /^\/users\/me\/invitations\/[^/]+\/(accept|decline)$/.test(path))) ||
+      (req.method === "PUT" &&
+        /^\/organizations\/[^/]+\/members\/[^/]+\/roles$/.test(path))
+    ) {
+      const keys = headerValues(req, "idempotency-key");
+      if (!keys.length)
+        fail(400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key required");
+      if (keys.length !== 1 || !/^[A-Za-z0-9._:-]{1,128}$/.test(keys[0]))
+        fail(400, "VALIDATION_FAILED", "Invalid Idempotency-Key");
+      headers["idempotency-key"] = keys[0];
+    }
     if (context) {
       headers["x-user-id"] = context.sub;
       headers["x-session-id"] = context.sid;

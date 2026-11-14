@@ -5,6 +5,11 @@ import { type Config, setupHttp, fail } from "@lamu/runtime";
 import { AuthController } from "./routes/auth.controller";
 import { ProxyService, GATEWAY_CONFIG } from "./routes/proxy.service";
 import { UsersController } from "./routes/users.controller";
+import { InvitationsController } from "./routes/invitations.controller";
+import {
+  OrganizationsController,
+  PublicOrganizationsController,
+} from "./routes/organizations.controller";
 import { JwtGuard } from "./auth/jwt.guard";
 import { SwaggerModule, type OpenAPIObject } from "@nestjs/swagger";
 import { readFileSync } from "node:fs";
@@ -28,7 +33,14 @@ class HealthController {
 }
 export async function createGatewayApp(config: Config) {
   @Module({
-    controllers: [HealthController, AuthController, UsersController],
+    controllers: [
+      HealthController,
+      AuthController,
+      UsersController,
+      InvitationsController,
+      OrganizationsController,
+      PublicOrganizationsController,
+    ],
     providers: [
       ProxyService,
       JwtGuard,

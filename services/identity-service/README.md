@@ -6,6 +6,12 @@ M1 đã có backend NestJS/Prisma và Gateway. Phạm vi: register/login, JWT/pr
 
 ## Chạy local
 
+M2/P5 tiếp nối M1 đã triển khai organization/read/member/role replacement, internal authorization và public user profile theo [ADR 0003](../../docs/adr/0003-m2-p5-organization-rbac.md). Phạm vi/bằng chứng: [P0](report/REPORT_M2_P0_CONTRACT_01.md), [P5](report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md). P6 invitation triển khai theo ADR 0004; M2 đã nghiệm thu, manual Swagger/DOC-01 PASS theo xác nhận người dùng; xem [báo cáo nghiệm thu](report/REPORT_M2_ACCEPTANCE_01.md).
+
+P5 dùng cùng profile Compose `m1`/job migrate; deploy migration `202611140001_p5` thêm revision/idempotency và DML migration riêng `202611140002_rbac_reference` khởi tạo RBAC hệ thống cho DB mới, không phụ thuộc demo seed/không reset DB. Trong Swagger sau login, tạo organization với Idempotency-Key mới (success 201), đọc org/members, PUT roles với key mới. Assignment bắt buộc code/resource_type/resource_id, roles là tập unique, thay toàn bộ. Replay giữ kết quả cũ trong 24h nhưng kiểm lại quyền hiện tại; actor tự hạ mất quyền có thể nhận 403 khi retry. No-op/replay không tăng revision/event. Default runtime từ chối EVENT mutation với EVENT_SCOPE_UNVERIFIED; test mới được inject fixture resolver, không có env bật fixture. Internal check/profile không route qua Gateway.
+
+`npm run test:m1` hiện chạy cả regression M1 và P5, PostgreSQL thật/coverage; `node scripts/compose-smoke.cjs --p5` thêm luồng container P5 và ghi M2_P5_COMPOSE_EVIDENCE_01.json trên project test riêng. Test upgrade áp dụng SQL M1, lưu dữ liệu tổng hợp rồi SQL P5 và so invariants, không dùng migrate reset. Manual Swagger/DOC-01 M2 đã được người dùng xác nhận PASS. Production-sized migration/backup restore, Event thật và broker delivery vẫn cần nghiệm thu riêng.
+
 Từ root repository, cần Docker Engine/Compose. Chỉ Gateway publish cổng ứng dụng; Identity/DB ở network nội bộ.
 
 ```powershell
@@ -60,3 +66,7 @@ Identity không tự verify JWT; chỉ Gateway xác thực rồi cấp context h
 
 Theo dõi bàn giao cho các service khác tại [Identity/Gateway handoff](../../docs/integration/identity-handoff.md): cập nhật người phụ trách/người nhận, tiến độ từng đầu ra, contract version và bằng chứng tích hợp. Phạm vi triển khai ở [MASTER_PLAN.md](MASTER_PLAN.md); đề xuất rà soát ở [REVIEW_MASTER_PLAN01.md](report/REVIEW_MASTER_PLAN01.md). Bảng handoff không thay thế API/event contract hoặc báo cáo nghiệm thu.
 
+
+P6 dùng migration additive `202611140003_p6_invitations`, hạn invitation 7 ngày, snapshot role phía server; OWNER ACTIVE tạo/revoke, recipient ACTIVE list/accept/decline. Create 201, action 200; bốn POST cần Idempotency-Key TTL24h/lock2s. Existing membership kể cả INACTIVE trả ALREADY_MEMBER, không ghi đè/reactivate. Accept atomically ghi membership/assignments/revision1/MembershipChanged/result; replay không chạy lại nghiệp vụ, kiểm quyền nhận kết quả hiện tại. [Contract](report/REPORT_M2_P6_CONTRACT_01.md) / [evidence](report/REPORT_M2_P6_INVITATION_01.md).
+
+Luồng Swagger dự kiến: OWNER login → POST organization hoặc dùng org có quyền → POST members/invitations bằng email recipient và roles scoped → recipient login → GET users/me/invitations → POST accept với body rỗng/key mới → GET users/me thấy membership. Decline/revoke dùng các lời mời PENDING khác; accept không nhận roles. Manual Try it out/DOC-01 M2 PASS — USER-CONFIRMED, không phải lượt manual do Codex trực tiếp chạy. `npm run test:m1` chạy regression M1/P5/P6; `node scripts/compose-smoke.cjs --p6` ghi artifact M2_P6 riêng, không ghi đè bằng chứng cũ. EVENT chỉ test inject, runtime thiếu resolver từ chối cả create/accept; không dùng env để bật fixture.

@@ -2,6 +2,8 @@
 
 Cổng truy cập duy nhất cho frontend: xác thực JWT, định tuyến, rate limit và API Composition. Gateway không sở hữu dữ liệu nghiệp vụ.
 
+P5 thêm allowlist POST/GET organizations, GET members, PUT member roles và GET public organization; route protected dùng cùng JwtGuard M1. Chỉ mutation P5 forward một Idempotency-Key hợp lệ; query pagination giữ nguyên cho Identity validate. Hai endpoint `/internal/` chỉ ở Identity, bị loại khỏi projection Swagger và không có route Gateway. [ADR 0003](../docs/adr/0003-m2-p5-organization-rbac.md) và canonical HTTP v1.1.0 ghi contract được duyệt; P6 được triển khai riêng theo ADR 0004 và canonical v1.2.0.
+
 M1 có register/login/refresh/logout và `/api/users/me`; API Composition và các route service nghiệp vụ chưa thuộc M1. Xem [runbook Identity/Gateway](../services/identity-service/README.md) cho cấu hình/chạy/test.
 
 NestJS app build riêng: `npm run build -w @lamu/gateway`; image riêng từ `gateway/Dockerfile`. Public port mặc định loopback 8080, có thể cấu hình GATEWAY_BIND/GATEWAY_PORT. IDENTITY_URL là địa chỉ nội bộ; JWT_SECRET/ISSUER/AUDIENCE khớp Identity, timeout mặc định 3000ms. Không truy cập identity_db.
@@ -10,3 +12,5 @@ Swagger `/docs`, JSON `/docs-json` dùng [contract projection](../shared/contrac
 
 Runtime chạy user node, không chứa Jest/tsx. Log chỉ gồm request_id/method/status/duration_ms, không body/header/token/URL query. Rate limit local theo IP, auth nghiêm hơn general; không có distributed limit. Không tự bật CORS rộng hoặc trust proxy. Browser frontend thật và cookie policy thuộc M4; local network trust không thay xác thực service-to-service khi triển khai ngoài local.
 
+
+P6 allowlist thêm năm route create/list/accept/decline/revoke invitation theo canonical; JwtGuard áp dụng cả năm, bốn POST forward một Idempotency-Key hợp lệ, list forward query để Identity validate. Không wildcard/internal route. Swagger /docs-json là projection v1.2.0. Flow container: `node scripts/compose-smoke.cjs --p6`, artifact M2_P6 riêng. Manual Swagger/DOC-01 M2: PASS — USER-CONFIRMED, xem [nghiệm thu](../services/identity-service/report/REPORT_M2_ACCEPTANCE_01.md).

@@ -47,7 +47,7 @@ Mặc định mọi bảng và endpoint trong §3 là MUST. Chỉ những mục 
 
 | Miền | MUST (bắt buộc nghiệm thu) | STRETCH (hoãn được, không cản nghiệm thu) |
 |---|---|---|
-| Identity | Tám bảng ở §3.1; `register`/`login`/`refresh`/`logout`; `GET /users/me`; tạo organization + membership + gán role; `POST /internal/authorization/check` khớp resource scope | Endpoint invitations; API tự quản lý permission; phát hiện reuse refresh token; `GET /internal/users/{id}/contact` |
+| Identity | Tám bảng ở §3.1; `register`/`login`/`refresh`/`logout`; `GET /users/me`; tạo organization + membership + gán role; invitation API M2; `POST /internal/authorization/check` khớp resource scope | API tự quản lý permission; phát hiện reuse refresh token; `GET /internal/users/{id}/contact` |
 | Event | Bảng `events`; CRUD + publish/cancel; check quyền qua Identity | `event_speakers`, `event_schedule_items`, `event_assets` |
 | Registration | `ticket_types`, `inventory`, `reservations`, `reservation_items`, `registrations`, `tickets`, `event_snapshot`; lock `FOR UPDATE` + `CHECK` quota; `Idempotency-Key`; confirm vé miễn phí một bước; worker giải phóng hết hạn; outbox | Check-in bằng QR/scanning; waitlist; giỏ vé nhiều loại có ưu đãi |
 | Payment | `payments` (kèm `event_id`), `refunds`, `processed_messages`, `outbox_events`; khởi động bằng `ReservationCreated`; mock provider idempotent; tự refund khi `EventCancelled` | `POST /internal/payments` qua REST; adapter provider thật; báo cáo đối soát |
@@ -76,11 +76,15 @@ M1 Auth/Gateway đã chốt theo [ADR 0002](adr/0002-m1-auth-gateway.md) và [co
 
 **RBAC:** Owner cấp organization quản lý cấu hình, thành viên và sự kiện. Admin có các permission quản trị được gán. Speaker là role cấp event với quyền giới hạn. Attendee là người mua vé, không có permission quản trị. Quyền phải khớp cả role/action lẫn phạm vi resource. Bảng permission và role seed ở §3.1.1; Speaker/Attendee không có endpoint riêng (quyết định 5).
 
-**Endpoints:** `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; `GET /users/me`; `POST /organizations`; `GET /organizations/{orgId}`; `GET /organizations/{orgId}/members`; `PUT /organizations/{orgId}/members/{userId}/roles`; `GET /public/organizations/{slug}`; `GET /internal/users/{userId}/public-profile`; `POST /internal/authorization/check`. STRETCH: `POST /organizations/{orgId}/members/invitations`, `GET /internal/users/{userId}/contact`.
+**Endpoints:** `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; `GET /users/me`; `POST /organizations`; `GET /organizations/{orgId}`; `GET /organizations/{orgId}/members`; `PUT /organizations/{orgId}/members/{userId}/roles`; `GET /public/organizations/{slug}`; `GET /internal/users/{userId}/public-profile`; `POST /internal/authorization/check`. M2/P6: create/list/accept/decline/revoke invitation theo canonical v1.2.0. STRETCH: `GET /internal/users/{userId}/contact`.
 
 **Tích hợp:** Gateway verify JWT HS256 bằng secret chung (quyết định 8), service nhận `X-User-Id`; Event Service gọi authorization check. Phát `UserRegistered`, `OrganizationCreated`, `MembershipChanged`.
 
 ### 3.1.1 Permission và role seed
+
+M2/P5 được duyệt riêng ngày 14/11/2026 theo [ADR 0003](adr/0003-m2-p5-organization-rbac.md); không suy phê duyệt từ M1. Schema bổ sung memberships.membership_revision BIGINT mặc định 1 (giới hạn JSON safe integer) và idempotency_records qua migration additive, giữ user/session/org/backlog. Khóa key → org → users → membership; kiểm quyền/ACTIVE lại dưới khóa, bảo vệ OWNER hợp lệ cuối; mutation/revision/result/outbox cùng transaction. No-op/replay không tăng revision/event. P6 invitation được triển khai tiếp theo ADR 0004; worker M3 và Event thật M4 chưa triển khai.
+
+Resource matrix của 10 permission ở schema AuthorizationInput trong [canonical HTTP v1.1.0](../shared/contracts/http/identity.openapi.json): ORG cho org.* và event.create/read, EVENT cho event.read/update/publish/cancel, ticket.checkin/payment.refund. Check nhận đủ 5 field, caller nội bộ resolve org của event đáng tin. ORG assignment DB NULL serialize thành org ID; EVENT mutation chỉ test resolver riêng, default runtime không fallback fixture. Role codes/permissions seed bên dưới giữ nguyên.
 
 Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.member.read`, `org.member.manage`, `event.create`, `event.read`, `event.update`, `event.publish`, `event.cancel`, `ticket.checkin`, `payment.refund`. Service khác chỉ gửi `permission` khi check, không tự định nghĩa mã mới.
 
@@ -239,3 +243,5 @@ Chỉ tính cột MUST ở §3.0; hạng mục STRETCH không nằm trong tiêu 
 
 
 
+
+M2/P6 được người dùng duyệt riêng A–E theo [ADR 0004](adr/0004-m2-p6-invitations.md). Bảng organization_invitations lưu FK org/inviter/recipient, snapshot JSONB và lifecycle/hạn 7 ngày; partial unique PENDING/org/recipient. Idempotency bổ sung target_invitation_id nullable, giữ records P5. Khóa key → org → users → invitation → memberships; đọc lại quyền/expiry sau khóa, không gọi resolver dưới khóa. Accept tạo membership ACTIVE/revision1/assignments/MembershipChanged CREATED/result nguyên tử, không ghi đè membership có sẵn kể cả INACTIVE. ORG API thật, EVENT fixture test/default fail closed. Manual Swagger/DOC-01 đã được người dùng xác nhận PASS; M2 COMPLETE theo [nghiệm thu](../services/identity-service/report/REPORT_M2_ACCEPTANCE_01.md).

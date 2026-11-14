@@ -38,7 +38,18 @@ Các quy định sau ghi đè quy ước chung cũ **chỉ cho M1**:
 - Register ghi user + UserRegistered v1 cùng transaction vào `outbox_events` từ M1. Không phụ thuộc RabbitMQ; seed local không phát event, worker M3.
 - Swagger public ở Gateway `/docs`, JSON `/docs-json`; không có operation internal có thể thực thi qua Gateway.
 
-Các dòng M1 ở bảng dưới được đọc cùng contract đã chốt này. Mục M2/invitation vẫn theo sổ quyết định và kế hoạch, không tự freeze từ thay đổi M1.
+Các dòng M1 ở bảng dưới được đọc cùng contract đã chốt này. M2/P5 và P6 có quyết định riêng theo ADR 0003/0004, không tự freeze từ thay đổi M1.
+
+### M2/P5 chốt riêng ngày 14/11/2026
+
+Người dùng duyệt A–E của [P0 M2](../../services/identity-service/report/REPORT_M2_P0_CONTRACT_01.md); [ADR 0003](../adr/0003-m2-p5-organization-rbac.md) ghi nguồn phê duyệt. Canonical HTTP v1.1.0 là nguồn DTO/status/error, pagination, matrix/reason; Gateway/types sinh từ đó. Các quy định P5 sau ghi đè các ô draft tương ứng bên dưới. Phần này chỉ mô tả P5; P6 được duyệt riêng theo ADR 0004.
+
+- Create organization **201**; POST organization/PUT roles bắt buộc một Idempotency-Key. TTL 24h, key lock 2s, hash có actor/operation/target/body canonical; replay kiểm quyền hiện tại, hết TTL là request mới. Không đổi ngoại lệ auth M1. Assignment bắt buộc code/resource_type/resource_id, tối đa 100, unique/không thứ tự; empty roles hợp lệ nếu còn OWNER.
+- GET members trả `{items,total,limit,offset}`, sort user_id, limit mặc định 20 (1–100), offset 0 (0–2147483647); chỉ nhận hai query này. Item có user_id/display_name/status membership/roles scoped, không email. GET org cho user ACTIVE/membership ACTIVE; my_roles chỉ hiển thị.
+- Authorization/check bắt buộc user_id/organization_id/resource_type/resource_id/permission. ORG cho org.read/org.member.read/org.member.manage/event.create/event.read; EVENT cho event.read/update/publish/cancel, ticket.checkin, payment.refund. Input sai 400; deny hợp lệ 200 với reason enum; caller không mutation khi deny/hạ tầng lỗi. Caller nội bộ phải resolve org của event đáng tin trước check.
+- Internal public-profile chỉ `{id,display_name}`, không có/LOCKED trả 404. Hai endpoint internal không có route/Swagger public.
+- Bổ sung 400 IDEMPOTENCY_KEY_REQUIRED; 409 SLUG_TAKEN/LAST_OWNER_REQUIRED/CONFLICT/IDEMPOTENCY_IN_PROGRESS/EVENT_SCOPE_UNVERIFIED. Envelope/request ID giữ M1. User/membership/target không ACTIVE không được mutation; quyền actor/OWNER kiểm lại dưới khóa org. Mutation/revision/result/outbox nguyên tử.
+- OrganizationCreated/MembershipChanged v1 lưu từ mutation P5 đầu tiên theo JSON Schema canonical. No-op/replay/rollback không event/revision mới. ORG provider thật; EVENT fixture chỉ test, default runtime fail closed khi thiếu resolver. Chưa Event M4/worker M3.
 
 | API | Làm gì | Vào → Ra | Lỗi | Quyền | Event / bảng ghi |
 |---|---|---|---|---|---|
@@ -47,14 +58,18 @@ Các dòng M1 ở bảng dưới được đọc cùng contract đã chốt này
 | `POST /auth/refresh` | Đổi refresh token lấy access token mới | `{refresh_token}` → như login | 401 hết hạn/thu hồi | Công khai | đọc/ghi `refresh_sessions` |
 | `POST /auth/logout` | Thu hồi refresh session hiện tại | `{refresh_token}` → `{status: "OK"}` | 401 | `X-User-Id` | ghi `refresh_sessions.revoked_at` |
 | `GET /users/me` | Hồ sơ người đang đăng nhập + các tổ chức thành viên | → `{id, email, display_name, memberships[]}` với `memberships: [{organization_id, name, slug, roles[]}]` (`roles[]` là mã role user có trong org đó, ví dụ `["OWNER"]`) | 401 | Self | đọc `users`, `memberships`, `membership_roles`, `organizations` |
-| `POST /organizations` | Tạo tổ chức, người tạo tự thành membership role `OWNER` | `{name, slug}` → `{organization_id}` | 409 slug trùng, 400 | Đã đăng nhập | ghi `organizations`, `memberships`, `membership_roles`; phát `OrganizationCreated` |
+| `POST /organizations` | Tạo tổ chức, người tạo tự thành membership role `OWNER` | `{name, slug}` → 201 `{organization_id}` | 409 slug trùng, 400 | Đã đăng nhập | ghi `organizations`, `memberships`, `membership_roles`; phát `OrganizationCreated` |
 | `GET /organizations/{orgId}` | Chi tiết tổ chức + vai trò của tôi trong org | → `{id, name, slug, my_roles[]}` | 404, 403 | `org.read` hoặc là thành viên | đọc |
-| `GET /organizations/{orgId}/members` | Danh sách thành viên kèm role đang gán | → `[{user_id, display_name, status, roles[]}]` | 403, 404 | `org.member.read` | đọc `memberships`, `membership_roles` |
-| `PUT /organizations/{orgId}/members/{userId}/roles` | Gán lại (thay thế) role cho một membership | `{roles: [{code, resource_type?, resource_id?}]}` → `{status: "OK"}` | 403, 404 | `org.member.manage` | ghi `membership_roles`; phát `MembershipChanged` |
-| `POST /internal/authorization/check` | Điểm chốt quyền duy nhất của hệ thống | `{user_id, organization_id?, resource_type?, resource_id?, permission}` → `{allowed: true/false, reason}` | 400 | Nội bộ | đọc `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles` |
+| `GET /organizations/{orgId}/members` | Danh sách thành viên kèm role đang gán | → `{items:[{user_id,display_name,status,roles[]}],total,limit,offset}` | 403, 404 | `org.member.read` | đọc `memberships`, `membership_roles` |
+| `PUT /organizations/{orgId}/members/{userId}/roles` | Gán lại (thay thế) role cho một membership | `{roles: [{code, resource_type, resource_id}]}` → `{status: "OK"}` | 403, 404 | `org.member.manage` | ghi `membership_roles`; phát `MembershipChanged` |
+| `POST /internal/authorization/check` | Điểm chốt quyền duy nhất của hệ thống | `{user_id, organization_id, resource_type, resource_id, permission}` → `{allowed: true/false, reason}` | 400 | Nội bộ | đọc `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles` |
 | `GET /internal/users/{userId}/public-profile` | Tên + avatar, không kèm email; dùng cho API Composition | → `{id, display_name}` | 404 | Nội bộ | đọc `users` |
 | `GET /public/organizations/{slug}` | Trang tin công khai của ban tổ chức | → `{name, slug}` | 404 | Công khai | đọc `organizations` |
-| STRETCH `POST /organizations/{orgId}/members/invitations` | Thư mời user chưa có tài khoản | | | `org.member.manage` | |
+| `POST /organizations/{orgId}/members/invitations` | M2/P6 mời user đã có tài khoản | `{email,roles[]}` → 201 `{invitation_id,status:"PENDING",expires_at}` | 400/403/404; 409 ALREADY_MEMBER/INVITATION_ALREADY_PENDING | OWNER ACTIVE đúng org | ghi invitation/idempotency, không MembershipChanged |
+| `GET /users/me/invitations` | Lời mời của tôi, mọi trạng thái | `limit/offset` → `{items,total,limit,offset}` | 400/401/403 | Self ACTIVE | đọc, effective expiry không ghi |
+| `POST /users/me/invitations/{id}/accept` | Nhận snapshot role phía server | `{}` hoặc không body → 200 `{invitation_id,status:"ACCEPTED",membership_id}` | 403/404; 409 INVITATION_EXPIRED/INVITATION_NOT_PENDING/ALREADY_MEMBER | Đúng recipient; inviter còn OWNER ACTIVE | membership/assignment/revision1/CREATED/outbox/result nguyên tử |
+| `POST /users/me/invitations/{id}/decline` | Từ chối | `{}` hoặc không body → 200 `{invitation_id,status:"DECLINED"}` | 403/404; 409 INVITATION_EXPIRED/INVITATION_NOT_PENDING | Recipient ACTIVE | invitation/result; không MembershipChanged |
+| `POST /organizations/{orgId}/members/invitations/{id}/revoke` | Thu hồi | `{}` hoặc không body → 200 `{invitation_id,status:"REVOKED"}` | 403/404; 409 INVITATION_EXPIRED/INVITATION_NOT_PENDING | Bất kỳ OWNER ACTIVE đúng org | invitation/result; không MembershipChanged |
 | STRETCH `GET /internal/users/{userId}/contact` | Tra email theo user_id. Không dùng ở MUST vì email đã có trong payload event | | | Nội bộ | |
 
 ## 2. Event Service (`event_db`)
@@ -181,3 +196,7 @@ Còn đúng hai việc cần cả nhóm duyệt trước khi freeze, vì chúng 
 
 1. Danh sách 10 permission code và 4 role seed ở §3.1.1 — Identity và Event phải dùng chung một danh sách.
 2. Tên event, routing key và queue trong `docs/api/messaging.md` (sẽ viết từ cột "Event / bảng ghi" của tài liệu này) — đặt sai tên lúc đó phải sửa cả producer lẫn consumer.
+
+### M2/P6 — chốt riêng 14/11/2026
+
+Người dùng xác nhận toàn bộ A–E trong [contract P6](../../services/identity-service/report/REPORT_M2_P6_CONTRACT_01.md); [ADR 0004](../adr/0004-m2-p6-invitations.md). HTTP canonical v1.2.0 là authority. Invitation 7 ngày, partial unique PENDING/org/recipient, snapshot bất biến; existing membership ACTIVE/INACTIVE không bị ghi đè. Bốn POST cần key TTL24h/lock2s; replay kiểm quyền hiện tại nhưng không đòi PENDING. Accept replay không kiểm lại inviter hoặc expiry, cần recipient và membership kết quả ACTIVE. Fresh key trên terminal state 409. List limit20/max100/offset, sort created_at/id DESC, không email. EVENT create/accept chỉ fixture test, normal thiếu resolver fail closed. Không thêm event invitation hoặc email; manual Swagger/DOC-01 M2 PASS — USER-CONFIRMED theo [nghiệm thu](../../services/identity-service/report/REPORT_M2_ACCEPTANCE_01.md). Xem [bằng chứng](../../services/identity-service/report/REPORT_M2_P6_INVITATION_01.md).

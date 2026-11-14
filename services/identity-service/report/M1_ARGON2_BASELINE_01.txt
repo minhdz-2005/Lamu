@@ -16,23 +16,23 @@ Container limits: cpus=2, memory=256m; image Node 24.19.0-bookworm-slim
     "timeCost": 2,
     "parallelism": 1
   },
-  "measured_at": "2026-11-13T04:50:31.800Z",
+  "measured_at": "2026-11-14T09:25:55.742Z",
   "results": [
     {
       "concurrency": 1,
       "count": 20,
-      "p50_ms": 35.66331000000014,
-      "p95_ms": 53.082861000000094,
-      "elapsed_ms": 760.105261,
+      "p50_ms": 37.759893000000034,
+      "p95_ms": 60.29362500000002,
+      "elapsed_ms": 804.114586,
       "errors": 0,
       "error_rate": 0
     },
     {
       "concurrency": 4,
       "count": 20,
-      "p50_ms": 98.7995719999999,
-      "p95_ms": 110.64371300000016,
-      "elapsed_ms": 523.4511440000001,
+      "p50_ms": 98.97391000000016,
+      "p95_ms": 110.51922599999989,
+      "elapsed_ms": 486.518994,
       "errors": 0,
       "error_rate": 0
     }

@@ -1,0 +1,54 @@
+{
+  "scope": "P6 final working tree; no commit; hashes of local files, observed container image IDs separately. Gateway title-only metadata regenerated after Compose build context capture; verified by contracts:check.",
+  "runtime": {
+    "node": "v24.19.0",
+    "npm": "11.17.0",
+    "postgres": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit"
+  },
+  "contract_version": "1.2.0",
+  "tests": {
+    "suites": 20,
+    "passed": 99,
+    "skipped": 0,
+    "seconds": 45.302,
+    "coverage": {
+      "statements": 98.05,
+      "branches": 91.44,
+      "functions": 98.76,
+      "lines": 98.11
+    }
+  },
+  "compose": {
+    "project": "lamu-m1-smoke-1794652405564",
+    "images": {
+      "identity-db": "sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139",
+      "identity-service": "sha256:f6bd720ca8d772501e54d3113cc0208489c746bfb25c79e2d93e94282cd797a2",
+      "gateway": "sha256:1d81519b2aa950c099e45d9abacc6efb07bc356f7e61452b82d3a99efb039453",
+      "identity-migrate": "sha256:79661fedcc93608def50895b4b3d64f11f5fbc4ac141322c4d613a1aa87d0619"
+    }
+  },
+  "sha256": {
+    "shared/contracts/http/identity.openapi.json": "79b1f4ad6273d3a9e57ace98754f45eb70d33c2cbda8ef0f0972e9c7cb06e301",
+    "shared/contracts/http/gateway.openapi.json": "90ee04b0ce8a0e08827ca6381b41cfb71a970bd72cacbf23c57eec1c43901655",
+    "shared/contracts/http/generated/identity.d.ts": "a0e81f8d741c2c11eba047c1aed77c71082845df9a37849cd6135a744c501bdc",
+    "shared/contracts/events/membership-changed.v1.schema.json": "5925f0571663884d3203418ce20bebb5eb25f15b3bab18843b99e42fbe9d46cd",
+    "services/identity-service/prisma/schema.prisma": "35b213c3c5f10a0a4ed4db50681f9eef7f4b4bd9e5fa5b549763114317390b18",
+    "services/identity-service/prisma/migrations/202611140003_p6_invitations/migration.sql": "f5a58379ca6763b93f0adcb0823d5d5c8ca7eb2af9a05fbaa9bcfc1d12f3d70f",
+    "services/identity-service/src/modules/organizations/invitations.service.ts": "1443083650bac886a445435ec64c154eeda3cb955f66e2008806f16da5257a86",
+    "services/identity-service/src/modules/organizations/invitations.controller.ts": "b7fb9d09b188a426ccbc7c1a04e2c8883ab015b94095c6a776aabcab9aa0813e",
+    "services/identity-service/src/modules/organizations/organizations.service.ts": "a37905575c01a723714e2e9c28ebca7df3c562a60055eafc4f01416f2a6708cb",
+    "services/identity-service/src/modules/organizations/organizations.controller.ts": "57f8b11da4402ea4f47760594ed0429a2a697bc82d4d3259478e41eb3e02b7fa",
+    "services/identity-service/src/modules/organizations/organizations.module.ts": "23b7e621ebe17c14e3b165ff3cf1bc63e5c3df12241e2694c7f2ca7a24c19a7c",
+    "services/identity-service/src/modules/organizations/dto/invitation.dto.ts": "7714d68168e42ee1debc82a26b619d6388a93762bfc09b732c1c89f0e932c2f5",
+    "gateway/src/routes/invitations.controller.ts": "f9ec490b88ccf67c2d33a838e8fbb65f88ca83c83733c7dc97faa6cfb4fb7b03",
+    "gateway/src/routes/proxy.service.ts": "850b85377230110e4aaf1a493e4dc762496d08484c07d1169a7f7b47086afb40",
+    "gateway/src/app.ts": "e3c9a73637ff3479323210c3cfc312ca87894100741075bc2cd6548225c22f27",
+    "scripts/contract-projection.cjs": "78ddbc17c075f63ea153a3728544f617dc4193905d09bc20d91cb3476100111f",
+    "scripts/compose-smoke.cjs": "09dd2e4495851e50db55582c20399b38074d1ba056ef4c4e25fd4a51e039ba5e",
+    "tests/p6-contract.spec.cjs": "0fdf1169d2c5c5d9afbcd030051f898a6f80de525ab57e808fc466c879bfda82",
+    "tests/p6-invitation.spec.ts": "86d244e1764bdd5d0f204c1119748d6e442010c2bc3f964002ced5197d8aef03",
+    "tests/p6-transactions.spec.ts": "afa38d0c0fcf034e8d5b2e657bc4c479ffce10618ecea107392060c71714953e",
+    "tests/p6-upgrade.spec.ts": "c1e68766f060eaa4947564bb2a0634797f6f250663a7779fb0b3bab8d95e57ec",
+    "tests/p6-helpers.ts": "552874e6d985edd393b0f600475649733436c31a859ebc02c84f4248e66b114d"
+  }
+}

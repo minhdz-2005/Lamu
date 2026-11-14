@@ -10,7 +10,7 @@ Quy tắc: `message_id` trên broker chính là `event_id` envelope, nên consum
 |---|---|---|---|
 | `UserRegistered` | Identity | `user_id`, `email`, `display_name` | chưa có |
 | `OrganizationCreated` | Identity | `organization_id`, `slug`, `created_by` | chưa có |
-| `MembershipChanged` | Identity | **Đề xuất v1/F10:** `membership_id`, `organization_id`, `user_id`, `status`, `membership_revision`, `change_type`, `roles[{code, resource_type, resource_id}]`; [chi tiết và trạng thái freeze](#membership-changed-f10) | chưa có; không tự thêm consumer MUST |
+| `MembershipChanged` | Identity | **v1 P5 đã duyệt:** `membership_id`, `organization_id`, `user_id`, `status`, `membership_revision`, `change_type`, `roles[{code, resource_type, resource_id}]`; [chi tiết và trạng thái freeze](#membership-changed-f10) | chưa có; không tự thêm consumer MUST |
 | `EventPublished` | Event | `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` | Registration |
 | `EventUpdated` | Event | `event_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` | Registration |
 | `EventCancelled` | Event | `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at`, `cancelled_reason` | Registration, Payment |
@@ -39,15 +39,15 @@ Ngày 13/11/2026, người dùng đã chốt đề xuất P0 M1 theo [ADR 0002](
 
 <a id="membership-changed-f10"></a>
 
-## MembershipChanged v1: đề xuất xử lý F10
+## MembershipChanged v1: P5 đã duyệt, delivery M3 chưa triển khai
 
-**Cập nhật 13/11/2026 — bản đề xuất để Identity và các service liên quan review, chưa freeze/chưa có JSON Schema thực thi cho shape dưới đây.** Tham chiếu [review F10](../../../services/identity-service/report/REVIEW_MASTER_PLAN01.md#f10). Bổ sung này làm rõ dòng MembershipChanged trong bảng; không thay shape của 13 event còn lại hoặc OpenAPI `/users/me`. Producer/consumer không tự suy payload mới đã được phê duyệt từ tên event cũ.
+**Cập nhật 14/11/2026 — người dùng chốt A–E/P0 M2 cho P5, theo [ADR 0003](../../../docs/adr/0003-m2-p5-organization-rbac.md).** Schema canonical máy kiểm được: [OrganizationCreated v1](organization-created.v1.schema.json), [MembershipChanged v1](membership-changed.v1.schema.json), fixture tổng hợp trong fixtures/. Payload runtime không lấy từ ví dụ Markdown. Giao nhận broker/consumer projection M3 và Event thật M4 vẫn NOT RUN; không suy đã có consumer review/integration. Tham chiếu [review F10](../../../services/identity-service/report/REVIEW_MASTER_PLAN01.md#f10). Bổ sung này làm rõ dòng MembershipChanged trong bảng; không thay shape của 13 event còn lại hoặc OpenAPI `/users/me`. Producer/consumer không tự suy payload mới đã được phê duyệt từ tên event cũ.
 
 ### Ngữ nghĩa và envelope
 
 MembershipChanged là **snapshot đầy đủ của một membership sau mutation**. Consumer dựng projection thay toàn bộ state/roles bằng snapshot mới hơn; không hiểu roles là danh sách role cần cộng thêm. Thu hồi OWNER rồi nhận ADMIN phải bỏ OWNER cũ khỏi projection.
 
-| Field | Quy định đề xuất |
+| Field | Quy định producer P5 đã duyệt |
 |---|---|
 | `event_id` | UUID duy nhất cho một event đã lưu outbox; broker message_id bằng event_id; retry không sinh ID mới |
 | `event_type` | `MembershipChanged` |
@@ -64,7 +64,7 @@ MembershipChanged là **snapshot đầy đủ của một membership sau mutatio
 |---|---|
 | `membership_id` | UUID ổn định của membership |
 | `organization_id`, `user_id` | UUID tổ chức và user của membership; thay owner không đồng nghĩa thay identity của aggregate |
-| `status` | Bản đề xuất M2 chỉ có `ACTIVE`; thêm trạng thái/lifecycle khác cần review contract và trigger trước khi producer phát |
+| `status` | Contract P5 chỉ có `ACTIVE`; thêm trạng thái/lifecycle khác cần review contract và trigger trước khi producer phát |
 | `membership_revision` | Integer dương, khởi đầu 1; tăng theo mutation có thay đổi state trên cùng membership, độc lập với version schema |
 | `change_type` | `CREATED` hoặc `ROLES_REPLACED` trong phạm vi hiện tại |
 | `roles[]` | Toàn bộ assignment sau mutation, không duplicate; thứ tự array không mang ý nghĩa nghiệp vụ. Array rỗng là snapshot không có role nếu policy cho phép, không phải “không cập nhật role” |
@@ -142,7 +142,7 @@ Identity cập nhật state, membership_revision và ghi outbox cùng transactio
 - [ ] Mapping ORG NULL trong DB sang org UUID trong payload, EVENT E1/E2 và array roles rỗng được mô tả/test rõ.
 - [ ] Consumer/schema version không tương thích có policy chuyển phiên bản; bản v1 chưa freeze không được coi là contract production đã ổn định.
 
-Chưa thay các event Identity khác hoặc bổ sung event lifecycle ngoài phạm vi M2. Checklist trên là công việc tương lai, chưa có bằng chứng thực thi trong lần cập nhật tài liệu này.
+Chưa thay các event Identity khác hoặc bổ sung event lifecycle ngoài phạm vi M2. Checklist trên bao gồm cả consumer/projection chưa triển khai; P6 accept đã được duyệt riêng theo ADR 0004 và kiểm chứng producer trong [báo cáo P6](../../../services/identity-service/report/REPORT_M2_P6_INVITATION_01.md); xem [báo cáo P5](../../../services/identity-service/report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md) cho bằng chứng producer/schema/transaction thực tế. Không đánh dấu consumer projection/delivery hoặc invitation PASS từ producer tests P5.
 
 <a id="identity-event-f05"></a>
 
@@ -191,3 +191,5 @@ Resolver không tạo transaction phân tán. Identity nên gọi trước trans
 - [ ] Mất kết nối/timeout Event không làm Identity cấp quyền từ dữ liệu client hoặc fixture; transaction invitation không tạo membership một phần.
 - [ ] Role replacement, tạo invitation và accept invitation đều dùng đường xác minh theo contract; replay mutation thành công tuân thủ idempotency, không tự accept lại.
 - [ ] Handler resolver không gọi ngược Identity check; test tích hợp dùng Event thật, tách kết quả khỏi test fixture M2.
+
+P6 trigger ACCEPTED riêng theo ADR 0004: fresh accept tạo membership ACTIVE mới phát đúng một MembershipChanged CREATED/revision1 cùng transaction snapshot assignments/invitation/result. Create/decline/revoke/expire/replay/rollback không MembershipChanged/revision mới. Schema v1 giữ nguyên, không invitation event/consumer mới. EVENT resolver ở create/accept chỉ fixture test; runtime thiếu resolver fail closed, replay thành công không resolve lại. Không dùng bằng chứng producer làm PASS worker/consumer M3/M4.

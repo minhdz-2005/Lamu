@@ -11,6 +11,10 @@ import { type Config, setupHttp, fail } from "@lamu/runtime";
 import { createDatabase, type Database, DATABASE } from "./database";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
+import {
+  OrganizationsModule,
+  type OrganizationOptions,
+} from "./modules/organizations/organizations.module";
 
 @Controller()
 class HealthController {
@@ -33,10 +37,18 @@ class DatabaseShutdown implements OnApplicationShutdown {
     await this.db.$disconnect();
   }
 }
-export async function createIdentityApp(config: Config, database?: Database) {
+export async function createIdentityApp(
+  config: Config,
+  database?: Database,
+  organizations: OrganizationOptions = {},
+) {
   const db = database ?? createDatabase(config.databaseUrl);
   @Module({
-    imports: [AuthModule.register(config, db), UsersModule.register(db)],
+    imports: [
+      AuthModule.register(config, db),
+      UsersModule.register(db),
+      OrganizationsModule.register(db, organizations),
+    ],
     controllers: [HealthController],
     providers: [
       { provide: DATABASE, useValue: db },

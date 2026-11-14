@@ -19,7 +19,11 @@ describe("P1 local seed", () => {
     ).toBe(10);
     expect(
       Number(
-        (await pool.query("SELECT count(*) FROM organizations")).rows[0].count,
+        (
+          await pool.query(
+            "SELECT count(*) FROM organizations WHERE id IN ('00000004-0000-4000-8000-000000000001','00000004-0000-4000-8000-000000000002') AND slug IN ('demo-a','demo-b')",
+          )
+        ).rows[0].count,
       ),
     ).toBe(2);
     expect(
@@ -31,7 +35,13 @@ describe("P1 local seed", () => {
         ).rows[0].count,
       ),
     ).toBe(0);
-    const rows = (await pool.query("SELECT password_hash FROM users")).rows;
+    // Test the seed's own rows; later suites may legitimately create tenants
+    // and synthetic non-login users in this shared disposable test database.
+    const rows = (
+      await pool.query(
+        "SELECT password_hash FROM users WHERE email::text LIKE '%@demo.lamu.test'",
+      )
+    ).rows;
     expect(rows.length).toBeGreaterThanOrEqual(5);
     expect(rows.every((r) => r.password_hash.startsWith("$argon2id$"))).toBe(
       true,

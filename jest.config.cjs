@@ -6,6 +6,9 @@ module.exports = {
   testEnvironment: "node",
   testTimeout: 30000,
   moduleNameMapper: {
+    // Prisma 7 generates .js import specifiers in its TypeScript sources.
+    // Jest executes source; Node executes the compiled .js files unchanged.
+    "^(\\.{1,2}/.*)\\.js$": "$1",
     "^@lamu/runtime$": "<rootDir>/shared/libraries/runtime/src",
   },
   collectCoverageFrom: [

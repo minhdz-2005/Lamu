@@ -1,6 +1,8 @@
 # Kế hoạch triển khai Identity và API Gateway
 
-Trạng thái: **kế hoạch, chưa triển khai**. Ngày lập: 12/11/2026.
+Trạng thái cập nhật 14/11/2026: **M2 COMPLETE / ACCEPTED: P5/P6 đã triển khai, gate tự động PASS và manual Swagger/DOC-01 PASS theo xác nhận người dùng**. Ngày lập kế hoạch gốc: 12/11/2026.
+
+Tiến độ hiện tại: [P5](report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md), [P6 contract](report/REPORT_M2_P6_CONTRACT_01.md), [P6 evidence](report/REPORT_M2_P6_INVITATION_01.md), ADR 0003/0004. Người dùng duyệt riêng toàn bộ A–E P6 ngày 14/11/2026. Những đoạn “đề xuất/chưa triển khai/NOT RUN” trong nội dung revision 2 bên dưới lưu baseline kế hoạch; đọc cùng báo cáo theo từng gate, không dùng thay evidence mới. Manual được người dùng xác nhận riêng sau khi tái hiện hướng dẫn; xem [nghiệm thu M2](report/REPORT_M2_ACCEPTANCE_01.md). Không nâng Event thật/worker từ kết quả M2.
 
 Revision 2 — 13/11/2026: tích hợp F01–F14 từ review vào thiết kế và nghiệm thu. Chỉ cập nhật kế hoạch; toàn bộ kiểm chứng runtime vẫn **NOT RUN**. Không suy phát hiện đã đóng từ việc sửa tài liệu.
 
@@ -350,23 +352,23 @@ Gate: toàn bộ ma trận M1 đạt, tái hiện trên database mới và sau r
 
 ### P5 — Organization và RBAC, rồi nối Gateway
 
-- [ ] Migration idempotency và membership_revision trước mutation M2. Tạo org + membership + OWNER + event tương ứng trong transaction; freeze trigger F10 trước ghi.
-- [ ] Đọc org/members, profile công khai, role replacement và internal authorization check.
-- [ ] Triển khai bảng input/result §7.2 sau freeze; khóa org và đọc lại quyền theo F06, bảo vệ OWNER cuối cùng, idempotency bao gồm target và vòng đời record.
-- [ ] Gateway thêm route được bảo vệ; Swagger role/scope và lỗi permission.
-- [ ] Test org A/B, role matrix, assignment nhiều role, cạnh tranh hạ hai OWNER và idempotency.
+- [x] Migration idempotency và membership_revision trước mutation M2. Tạo org + membership + OWNER + event tương ứng trong transaction; freeze trigger F10 trước ghi.
+- [x] Đọc org/members, profile công khai, role replacement và internal authorization check.
+- [x] Triển khai bảng input/result §7.2 sau freeze; khóa org và đọc lại quyền theo F06, bảo vệ OWNER cuối cùng, idempotency bao gồm target và vòng đời record.
+- [x] Gateway thêm route được bảo vệ; Swagger role/scope và lỗi permission.
+- [x] Test org A/B, role matrix, assignment nhiều role, cạnh tranh hạ hai OWNER và idempotency.
 
 Gate: không thao tác chéo org, không còn zero OWNER sau mutation được hỗ trợ; ORG assignment API thật, EVENT fixture tách biệt và fail closed khi thiếu resolver; outbox/revision nguyên tử. Chưa phải Event E2E M4.
 
 ### P6 — Lời mời trong ứng dụng ở cấp API, bàn giao M2
 
-- [ ] Migration invitation; tạo/list/accept/decline/revoke; expiry và uniqueness.
-- [ ] Accept tạo membership/role nguyên tử, không tự nâng quyền từ body client.
-- [ ] Gateway/Swagger hỗ trợ luồng OWNER tạo → đổi tài khoản → xem lời mời → accept → `/users/me` thấy membership.
-- [ ] Test người nhận sai, org sai, role sai, token thiếu, invitation hết hạn/thu hồi, inviter mất quyền, race accept/revoke.
-- [ ] Ghi contract dành cho giao diện “Lời mời của tôi” về sau.
+- [x] Migration invitation; tạo/list/accept/decline/revoke; expiry và uniqueness.
+- [x] Accept tạo membership/role nguyên tử, không tự nâng quyền từ body client.
+- [x] Gateway/Swagger hỗ trợ luồng OWNER tạo → đổi tài khoản → xem lời mời → accept → `/users/me` thấy membership.
+- [x] Test người nhận sai, org sai, role sai, token thiếu, invitation hết hạn/thu hồi, inviter mất quyền, race accept/revoke.
+- [x] Ghi contract dành cho giao diện “Lời mời của tôi” về sau.
 
-Gate: tất cả ca M2 đạt; không cần mail hoặc Notification để demo.
+Gate tự động P6: xem báo cáo P6 (PostgreSQL/coverage/Compose). **M2 đã nghiệm thu: manual Swagger/DOC-01 PASS — USER-CONFIRMED**, xem [báo cáo nghiệm thu](report/REPORT_M2_ACCEPTANCE_01.md). Không cần mail hoặc Notification để demo.
 
 ### P7 — Worker outbox và delivery event Identity, bàn giao M3
 
@@ -457,7 +459,9 @@ Database test và Compose project test phải tách local demo, không reset vol
 | EVT-03 | M3 | Crash sau publish trước mark sent | Có thể trùng cùng event ID; không tạo event ID mới |
 | DOC-01 | Mỗi mốc | Người khác làm theo README/Swagger | Tái hiện được các luồng đã bàn giao |
 
-**Quy ước nghiệm thu revision 2:** mọi ca ở §9.2, kể cả bảng gốc trên, có trạng thái **NOT RUN**; chưa có evidence runtime. Các bảng là tiêu chí REQUIRED của mốc tương ứng sau khi quyết định liên quan được freeze; ca nhiều tab M4 chỉ required nếu được đưa vào cam kết. Status/reason/code gắn “đề xuất” trong §5/§7 và bảng bổ sung chưa phải yêu cầu đã duyệt. Ca còn ghi “lỗi đã định nghĩa/theo contract” phải được điền status/body cụ thể trong OpenAPI trước gate; không chọn expected theo implementation tình cờ trả về.
+**Trạng thái hiện tại:** M2 đã nghiệm thu theo [báo cáo tổng](report/REPORT_M2_ACCEPTANCE_01.md): tự động99 tests PASS; manual Swagger/DOC-01 PASS — USER-CONFIRMED. Các dòng trạng thái revision 2 dưới đây được cập nhật theo phần M2 có bằng chứng; phần M3/M4 vẫn NOT RUN.
+
+**Quy ước tại thời điểm lập revision 2 (lịch sử):** mọi ca ở §9.2, kể cả bảng gốc trên, ban đầu NOT RUN; chưa có evidence runtime. Các bảng là tiêu chí REQUIRED của mốc tương ứng sau khi quyết định liên quan được freeze; ca nhiều tab M4 chỉ required nếu được đưa vào cam kết. Status/reason/code gắn “đề xuất” trong §5/§7 và bảng bổ sung chưa phải yêu cầu đã duyệt. Ca còn ghi “lỗi đã định nghĩa/theo contract” phải được điền status/body cụ thể trong OpenAPI trước gate; không chọn expected theo implementation tình cờ trả về.
 
 Phương pháp cho bảng gốc: INF dùng process/Compose và PostgreSQL thật; AUTH/SES dùng integration PostgreSQL + E2E Gateway và clock điều khiển; JWT/GW dùng HTTP E2E với upstream ghi nhận context; ORG/RBAC/OWN/IDEM/INV dùng DB thật, hai connection/barrier cho race và E2E; EVT dùng DB transaction/worker/broker test tùy mốc; DOC do người nhận tái hiện runbook. Mỗi ca phải ghi input/fixture, expected/actual, snapshot DB hoặc HTTP/log đã che nhạy cảm, version, môi trường và lệnh/bước; tất cả đều NOT RUN cho tới khi có kết quả. Mọi mutation bị từ chối/rollback không được để lại thay đổi nghiệp vụ, success idempotency hoặc outbox không tương ứng. Fault injection chỉ trên project/volume test riêng khi được giao triển khai, không chạy trong phiên sửa tài liệu.
 
@@ -466,19 +470,19 @@ Phương pháp cho bảng gốc: INF dùng process/Compose và PostgreSQL thật
 | ID / mốc | Điều kiện và trigger | Expected / tác động bị cấm | Phương pháp và bằng chứng | Trạng thái |
 |---|---|---|---|---|
 | AC-001 / M1 / F01 | A/B cùng user; access A + refresh B; giả/trùng header | Đề xuất 401 cho cặp lệch, A/B không đổi; header client không đổi verified context; access A + refresh A revoke chỉ A | E2E Gateway + upstream capture an toàn + session DB trước/sau | NOT RUN |
-| AC-002 / M1→M3 / F02 | Register M1, org/member M2 khi worker tắt; nâng cấp rồi bật worker M3; lỗi giữa transaction | Pending đủ event từ commit đầu tiên, rollback không event; upgrade giữ backlog, M3 phát payload gốc cùng ID; seed không phát ngoài test chỉ định | DB integration, fault injection transaction, migration upgrade và worker/broker test cô lập | NOT RUN |
-| AC-003 / M2 / F03 | Duyệt từng dòng input/result §7.2; OWNER A/E1, org B/E2, SPEAKER E1, ATTENDEE | 400 validation tách 200 deny; allow đúng permission/scope; E1 không lan E2/toàn org; outage không allow | Table-driven contract test + DB fixture + caller stub không mutation khi deny/outage | NOT RUN |
-| AC-004 / M2 / F04 | Cùng key/target/body; đổi target/body; khác actor/operation; race; crash trước/sau commit; mất quyền; TTL/cleanup | Replay success đúng trong TTL khi được phép; khác target/body 409, không success giả; một mutation commit với đúng tập event theo trigger; rollback sạch; không cache trái phép; expiry theo policy freeze | Hai connection PostgreSQL/barrier, clock điều khiển, fault injection trước/sau commit; đếm record/state/outbox | NOT RUN |
-| AC-005 / M2 và M4 / F05 | ORG thật; EVENT thiếu resolver, wrong org/not found/response sai/timeout; DRAFT hợp lệ | Fail closed không partial assignment/invitation accept; đề xuất 409/403/404/502/504 theo §7.2; M4 đúng org + quyền mới ghi | M2 fixture adapter tách config; M4 provider Event thật + trace không vòng gọi; báo cáo riêng hai phạm vi | NOT RUN |
-| AC-006 / M2 / F06 | Ép cả hai thứ tự hạ actor/gán role, hạ inviter/accept; hai OWNER tự hạ; accept/revoke/decline; expiry khi chờ | Quyền bị hạ trước thì từ chối, mutation commit trước được giữ; không zero OWNER/duplicate; hết hạn sau chờ không accept; rollback không event | Hai connection PostgreSQL + barrier; đối chiếu quyền, invitation, revision, idempotency/outbox sau commit | NOT RUN |
-| AC-007 / M1/M2 / F07 | DB sạch; insert orphan/trùng email/role/ORG NULL/EVENT; seed hai lần; upgrade DB có dữ liệu | Constraint chặn sai/trùng; 4 role/10 permission; scope mapping đúng, seed không nhân; upgrade không reset user/session/org | Integration PostgreSQL thật + kiểm migration SQL/index/FK có tên + dữ liệu trước/sau | NOT RUN |
+| AC-002 / M1→M3 / F02 | Register M1, org/member M2 khi worker tắt; nâng cấp rồi bật worker M3; lỗi giữa transaction | Pending đủ event từ commit đầu tiên, rollback không event; upgrade giữ backlog, M3 phát payload gốc cùng ID; seed không phát ngoài test chỉ định | DB integration, fault injection transaction, migration upgrade và worker/broker test cô lập | PASS phần DB/outbox M1/M2; worker M3 NOT RUN |
+| AC-003 / M2 / F03 | Duyệt từng dòng input/result §7.2; OWNER A/E1, org B/E2, SPEAKER E1, ATTENDEE | 400 validation tách 200 deny; allow đúng permission/scope; E1 không lan E2/toàn org; outage không allow | Table-driven contract test + DB fixture + caller stub không mutation khi deny/outage | PASS tự động — báo cáo P5/P6 |
+| AC-004 / M2 / F04 | Cùng key/target/body; đổi target/body; khác actor/operation; race; crash trước/sau commit; mất quyền; TTL/cleanup | Replay success đúng trong TTL khi được phép; khác target/body 409, không success giả; một mutation commit với đúng tập event theo trigger; rollback sạch; không cache trái phép; expiry theo policy freeze | Hai connection PostgreSQL/barrier, clock điều khiển, fault injection trước/sau commit; đếm record/state/outbox | PASS tự động — báo cáo P5/P6 |
+| AC-005 / M2 và M4 / F05 | ORG thật; EVENT thiếu resolver, wrong org/not found/response sai/timeout; DRAFT hợp lệ | Fail closed không partial assignment/invitation accept; đề xuất 409/403/404/502/504 theo §7.2; M4 đúng org + quyền mới ghi | M2 fixture adapter tách config; M4 provider Event thật + trace không vòng gọi; báo cáo riêng hai phạm vi | PASS M2 fixture/fail closed; Event thật M4 NOT RUN |
+| AC-006 / M2 / F06 | Ép cả hai thứ tự hạ actor/gán role, hạ inviter/accept; hai OWNER tự hạ; accept/revoke/decline; expiry khi chờ | Quyền bị hạ trước thì từ chối, mutation commit trước được giữ; không zero OWNER/duplicate; hết hạn sau chờ không accept; rollback không event | Hai connection PostgreSQL + barrier; đối chiếu quyền, invitation, revision, idempotency/outbox sau commit | PASS tự động — báo cáo P5/P6 |
+| AC-007 / M1/M2 / F07 | DB sạch; insert orphan/trùng email/role/ORG NULL/EVENT; seed hai lần; upgrade DB có dữ liệu | Constraint chặn sai/trùng; 4 role/10 permission; scope mapping đúng, seed không nhân; upgrade không reset user/session/org | Integration PostgreSQL thật + kiểm migration SQL/index/FK có tên + dữ liệu trước/sau | PASS tự động — báo cáo P5/P6 |
 | AC-008 / M3 / F08 | Đúng binding; không còn binding; queue khác nhận; restore; NACK/timeout/channel lỗi; crash sau confirm; hai attempt song song một return | Chỉ SENT đúng điều kiện §P7; return+ACK không SENT; phát hiện thiếu queue đích dù ACK; retry cùng ID; không ghép nhầm attempt | Broker test riêng, assert queue đích, return/confirm trace và outbox; reclaim/DB lỗi mark SENT test | NOT RUN |
 | AC-009 / M3 / F09 | Baseline persistent đã confirm chưa consume; lần lượt restart/recreate/down-up giữ volume/node/image; publish sau phục hồi | Đọc được cùng event ID và queue/binding; không chỉ healthy/queue rỗng; event mới route được; pending retry giữ ID | Compose project/volume riêng, fixture mới từng ca, ghi mount/node/image/project và message IDs; không xóa volume | NOT RUN |
-| AC-010 / M2/M3 / F10 | Create org/accept/replace/no-op/replay/rollback; schema thiếu/sai field; delivery revision 6 trước 5, duplicate/conflict | Trigger/revision đúng contract F10; schema validator từ chối payload sai; không role cũ hồi sinh; cùng revision khác state/cùng ID khác payload bị phát hiện | M2 DB + schema test; M3 broker + test projection harness, không thêm consumer MUST; schema version không tăng theo mutation | NOT RUN |
-| AC-011 / M1/M2 / F11 | Chạy từng trường hợp F11 bên dưới | HTTP/body và invariant cụ thể như bảng, không gộp config fail với readiness hoặc replay với lệnh mới | Integration/contract/E2E theo từng dòng; không coi mock là backend | NOT RUN |
+| AC-010 / M2/M3 / F10 | Create org/accept/replace/no-op/replay/rollback; schema thiếu/sai field; delivery revision 6 trước 5, duplicate/conflict | Trigger/revision đúng contract F10; schema validator từ chối payload sai; không role cũ hồi sinh; cùng revision khác state/cùng ID khác payload bị phát hiện | M2 DB + schema test; M3 broker + test projection harness, không thêm consumer MUST; schema version không tăng theo mutation | PASS producer/schema/transaction M2; delivery/projection M3 NOT RUN |
+| AC-011 / M1/M2 / F11 | Chạy từng trường hợp F11 bên dưới | HTTP/body và invariant cụ thể như bảng, không gộp config fail với readiness hoặc replay với lệnh mới | Integration/contract/E2E theo từng dòng; không coi mock là backend | PASS tự động — báo cáo P5/P6 |
 | AC-012 / M4 / F12 | Logout access còn/hết hạn, refresh đang chạy, bấm lặp/request 401, lỗi mạng/5xx/mismatch, mất response sau commit | Một refresh tối đa/một retry logout; cặp mới cùng sid; không hồi sinh local session; A revoked khi server xác nhận, B còn dùng; lỗi chỉ báo chưa xác nhận | Browser + API E2E backend thật, response delay/fault và DB/session API; kiểm UI cleanup/generation/retry count; nhiều tab theo phạm vi đã chốt | NOT RUN |
-| HANDOFF-01 / mỗi mốc / F13 | Bên nhận lấy H01–H05 và tái hiện phần được bàn giao | Tìm được version contract/runbook hoặc stub có giới hạn; provider thật và fixture tách biệt; thiếu chủ/lịch ghi chưa chốt, không giả đã hoàn tất | Review artifact/liên kết + bên nhận thực hiện runbook ở mốc có backend; evidence tại handoff | NOT RUN |
-| DEC-01 / P0 mỗi mốc / F14 | Kiểm D tương ứng trước công đoạn phụ thuộc | Có nguồn quyết định, artifact/version và test/evidence; đề xuất chưa ACCEPTED/FROZEN ngầm; số đo Argon2 chỉ baseline khi chưa SLA | Review sổ D00–D13 và evidence, đối chiếu catalog/spec/ADR theo mốc | NOT RUN |
+| HANDOFF-01 / mỗi mốc / F13 | Bên nhận lấy H01–H05 và tái hiện phần được bàn giao | Tìm được version contract/runbook hoặc stub có giới hạn; provider thật và fixture tách biệt; thiếu chủ/lịch ghi chưa chốt, không giả đã hoàn tất | Review artifact/liên kết + bên nhận thực hiện runbook ở mốc có backend; evidence tại handoff | PASS M2 người dùng tái hiện; service integration M4 NOT RUN |
+| DEC-01 / P0 mỗi mốc / F14 | Kiểm D tương ứng trước công đoạn phụ thuộc | Có nguồn quyết định, artifact/version và test/evidence; đề xuất chưa ACCEPTED/FROZEN ngầm; số đo Argon2 chỉ baseline khi chưa SLA | Review sổ D00–D13 và evidence, đối chiếu catalog/spec/ADR theo mốc | PASS quyết định M2 ADR 0003/0004; các mốc sau xét riêng |
 
 **Chi tiết F11 — các giá trị mới là đề xuất D03/D08:**
 
@@ -489,9 +493,9 @@ Phương pháp cho bảng gốc: INF dùng process/Compose và PostgreSQL thật
 | F11-SES-01 / M1 | A/B cùng user, access A + refresh B logout | 401 UNAUTHENTICATED, không đổi session, B vẫn refresh được | E2E và DB trước/sau | NOT RUN |
 | F11-SES-02 / M1 | Logout A rồi lặp cùng cặp chứng minh phiên, access còn hạn | 200 `{status:"OK"}`, giữ revoked_at đầu tiên; không chấp nhận refresh tùy ý/token đã rotation | E2E + so session/hash/revoked_at | NOT RUN |
 | F11-SES-03 / M1 | Access hết hạn, refresh còn hạn; logout→refresh→logout cặp mới | 401 lần đầu không mutate; refresh 200, logout 200 OK; giữ sid/hạn tuyệt đối, refresh cũ không dùng lại | Clock điều khiển + E2E/session DB | NOT RUN |
-| F11-INV-01 / M2 | Accept commit, retry cùng key/target/body còn TTL và quyền hợp lệ | Replay success status/body đã lưu; một membership/tập event, revision không tăng | HTTP + DB/idempotency/outbox | NOT RUN |
-| F11-INV-02 / M2 | Accept commit rồi accept bằng key mới | 409 INVITATION_NOT_PENDING; không đổi role/member/event | HTTP + DB | NOT RUN |
-| F11-INF-01 / M1→M2 | User/session còn hạn/org seed trên schema M1, migrate M2 | Exit 0, schema đúng version; ID/count/hash/status/hạn giữ nguyên, refresh phiên cũ hoạt động | Upgrade PostgreSQL test riêng; snapshot trước/sau, không reset | NOT RUN |
+| F11-INV-01 / M2 | Accept commit, retry cùng key/target/body còn TTL và quyền hợp lệ | Replay success status/body đã lưu; một membership/tập event, revision không tăng | HTTP + DB/idempotency/outbox | PASS tự động — báo cáo P5/P6 |
+| F11-INV-02 / M2 | Accept commit rồi accept bằng key mới | 409 INVITATION_NOT_PENDING; không đổi role/member/event | HTTP + DB | PASS tự động — báo cáo P5/P6 |
+| F11-INF-01 / M1→M2 | User/session còn hạn/org seed trên schema M1, migrate M2 | Exit 0, schema đúng version; ID/count/hash/status/hạn giữ nguyên, refresh phiên cũ hoạt động | Upgrade PostgreSQL test riêng; snapshot trước/sau, không reset | PASS tự động — báo cáo P5/P6 |
 | F11-INF-02 / M1 | Start thiếu env hoặc secret sai validation | Exit khác 0, không ready; log chỉ tên cấu hình lỗi không secret | Process/config test dữ liệu giả | NOT RUN |
 | F11-INF-03 / M1 | Sau startup, DB down rồi phục hồi | healthz 200 khi process sống; readyz 503→200; không lộ DSN, không giả depends_on tự restart ứng dụng | DB fault riêng, probe hữu hạn theo config ghi trong evidence | NOT RUN |
 | F11-GW-01 / M1 | Access hợp lệ, Identity mất kết nối | 502 UPSTREAM_UNAVAILABLE với request ID; không lộ stack/DSN, không biến thành deny | HTTP E2E/upstream fixture | NOT RUN |
@@ -555,21 +559,23 @@ Kết luận: đạt / chưa đạt mốc, lý do:
 
 ## 12. Checklist bàn giao
 
+Checklist dưới đây đã đạt cho phạm vi **M2 local API**, nguồn [nghiệm thu M2](report/REPORT_M2_ACCEPTANCE_01.md). Hướng dẫn recovery không đồng nghĩa đã chạy production backup/restore; integration Event/frontend/worker ở mốc sau.
+
 **F13/F14 — nơi cập nhật:** tiến độ/chủ việc/người nhận/ngày hẹn/version/PR và dependency cập nhật duy nhất tại [identity-handoff](../../docs/integration/identity-handoff.md), H01–H05 ở §2; quyết định D00–D13 và evidence ở [§6](../../docs/integration/identity-handoff.md#p0-decisions). Kế hoạch chỉ định phạm vi và gate, không sao chép bảng tiến độ. H01 auth/context giao Gateway/frontend theo M1; H02 authorization giao Event và service cần check trước handler M2, không đợi M3; H03 resolver giao Identity–Event trước M4; H04 schema ghi event theo M1/M2, delivery M3; H05 runbook/API thật/evidence giao từng mốc.
 
-Contract API cập nhật catalog và OpenAPI theo quy ước `docs/api/`: `docs/api/gateway.openapi.yaml`, `docs/api/services/identity.openapi.yaml`, `docs/api/services/event.openapi.yaml` là đầu ra cần tạo/freeze, không giả đã tồn tại. Shape event nằm ở [event contracts](../../shared/contracts/events/README.md); JSON Schema versioned và `docs/api/messaging.md` cần tạo khi freeze. Runbook ở README service; kết quả thực thi ở báo cáo mốc rồi liên kết vào handoff. Tách contract DRAFT/IN_REVIEW/FROZEN, implementation NOT_STARTED/IN_PROGRESS/IMPLEMENTED, integration NOT_RUN/PASS/FAIL/BLOCKED; cập nhật tài liệu không tự nâng hai trục sau. Không tự gán người/deadline hoặc biến mốc thành tuần chung của nhóm.
+Contract API M2 cập nhật catalog và canonical `shared/contracts/http/identity.openapi.json` v1.2.0; Gateway `shared/contracts/http/gateway.openapi.json` là projection, types sinh trong `shared/contracts/http/generated/identity.d.ts`. Các path OpenAPI trong `docs/api/` ở kế hoạch gốc không phải artifact authority hiện tại; Event spec thật vẫn thuộc M4. Shape event nằm ở [event contracts](../../shared/contracts/events/README.md); JSON Schema versioned và `docs/api/messaging.md` cần tạo khi freeze. Runbook ở README service; kết quả thực thi ở báo cáo mốc rồi liên kết vào handoff. Tách contract DRAFT/IN_REVIEW/FROZEN, implementation NOT_STARTED/IN_PROGRESS/IMPLEMENTED, integration NOT_RUN/PASS/FAIL/BLOCKED; cập nhật tài liệu không tự nâng hai trục sau. Không tự gán người/deadline hoặc biến mốc thành tuần chung của nhóm.
 
-- [ ] Source Identity/Gateway có build, lint/typecheck và test scripts tái lập.
-- [ ] Migration có lịch sử, seed local rõ ràng; không cần sửa DB bằng tay.
-- [ ] Compose chạy mốc tương ứng; env example không chứa secret thật; không xóa volume để khởi động lại.
-- [ ] README có cài đặt, build, start/stop/restart, migration, seed, test và xử lý lỗi thường gặp.
-- [ ] Swagger/OpenAPI đúng với API thực, có Bearer auth và ví dụ lỗi.
-- [ ] Bộ test và kết quả theo ma trận, bao gồm negative/race cases.
-- [ ] Contract API, role/scope, token/session, invitation và event đã cập nhật theo mốc.
-- [ ] Tài liệu nêu rõ logout không thu hồi JWT tức thời, fixture event scope và phần chưa tích hợp.
-- [ ] Hướng dẫn khôi phục: backup trước migration có dữ liệu, rollback image nếu schema tương thích hoặc forward-fix; không mặc định migration down an toàn.
-- [ ] Không chứa secret, token, password rõ của user thật hoặc thay đổi frontend ngoài phạm vi.
-- [ ] Báo cáo đánh giá chỉ rõ mốc hoàn thành và tồn đọng, có người khác tái hiện hướng dẫn.
+- [x] Source Identity/Gateway có build, format/typecheck và test scripts tái lập.
+- [x] Migration có lịch sử, seed local rõ ràng; không cần sửa DB bằng tay.
+- [x] Compose chạy mốc tương ứng; env example không chứa secret thật; không xóa volume để khởi động lại.
+- [x] README có cài đặt, build, start/stop/restart, migration, seed, test và xử lý lỗi thường gặp.
+- [x] Swagger/OpenAPI đúng với API thực, có Bearer auth và ví dụ lỗi.
+- [x] Bộ test và kết quả theo ma trận, bao gồm negative/race cases.
+- [x] Contract API, role/scope, token/session, invitation và event đã cập nhật theo mốc.
+- [x] Tài liệu nêu rõ logout không thu hồi JWT tức thời, fixture event scope và phần chưa tích hợp.
+- [x] Hướng dẫn khôi phục: backup trước migration có dữ liệu, rollback image nếu schema tương thích hoặc forward-fix; không mặc định migration down an toàn.
+- [x] Không chứa secret, token, password rõ của user thật hoặc thay đổi frontend ngoài phạm vi.
+- [x] Báo cáo đánh giá chỉ rõ mốc hoàn thành và tồn đọng, người dùng xác nhận tái hiện hướng dẫn (DOC-01); không tự gán tester khác.
 
 ## 13. Công việc để sau và quyết định mở
 
@@ -580,4 +586,4 @@ Contract API cập nhật catalog và OpenAPI theo quy ước `docs/api/`: `docs
 - Organization custom roles, xóa tổ chức/thành viên, chuyển quyền OWNER bằng luồng riêng: chưa yêu cầu; nếu thêm phải giữ invariant OWNER.
 - Quyết định kỹ thuật P0 còn mở theo [D00–D13](../../docs/integration/identity-handoff.md#p0-decisions): D01/D13 phiên bản và baseline Argon2; D02/D03 context/session retention/status/health; D05 permission-resource và input/result; D06 TTL/replay/timeout; D07 DDL/mapping/khóa; D08 invitation expiry/DTO/lỗi; D09 resolver; D10/D11 delivery/storage; D12 event snapshot/trigger/revision. D00 không hỏi lại; D04 outbox M1 đã ghi vào kế hoạch revision này nhưng catalog/artifact triển khai còn phải đồng bộ.
 
-Không cần hỏi lại các quyết định người dùng đã chốt. Nếu trong triển khai xuất hiện lựa chọn làm thay đổi nghiệp vụ/phạm vi, nêu tác động và xác minh riêng; các chi tiết kỹ thuật thông thường được xử lý trong phạm vi được giao. Đề xuất ở kế hoạch phải có nguồn chốt/artifact tương ứng trước freeze, không chuyển thành yêu cầu đã duyệt chỉ vì đã bổ sung ma trận test. Sẵn sàng hiện tại: M1/M2 có thể chuẩn bị thiết kế theo dependency, M3 chuẩn bị worker sau contract/storage; chưa mốc nào có bằng chứng nghiệm thu runtime.
+Không cần hỏi lại các quyết định người dùng đã chốt. Nếu trong triển khai xuất hiện lựa chọn làm thay đổi nghiệp vụ/phạm vi, nêu tác động và xác minh riêng; các chi tiết kỹ thuật thông thường được xử lý trong phạm vi được giao. Đề xuất ở kế hoạch phải có nguồn chốt/artifact tương ứng trước freeze, không chuyển thành yêu cầu đã duyệt chỉ vì đã bổ sung ma trận test. Sẵn sàng hiện tại: M2 COMPLETE theo báo cáo nghiệm thu; P7/M3 là bước tiếp theo, cần chốt contract delivery/storage trước implementation phụ thuộc. Event thật/frontend thuộc M4; không tự bắt đầu các mốc này.

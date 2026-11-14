@@ -7,10 +7,11 @@ import { validateConfig } from "../shared/libraries/runtime/src";
 import { createDatabase } from "../services/identity-service/src/database";
 import { createIdentityApp } from "../services/identity-service/src/app";
 import { createGatewayApp } from "../gateway/src/app";
+import type { OrganizationOptions } from "../services/identity-service/src/modules/organizations/organizations.module";
 export const config = () => validateConfig(process.env, "identity");
-export async function pair() {
+export async function pair(options: OrganizationOptions = {}) {
   const db = createDatabase(process.env.DATABASE_URL!);
-  const identity = await createIdentityApp(config(), db);
+  const identity = await createIdentityApp(config(), db, options);
   await identity.listen(0, "127.0.0.1");
   const gateway = await createGatewayApp({
     ...config(),

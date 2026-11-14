@@ -17,6 +17,10 @@ model User {
  sessions RefreshSession[]
  organizations Organization[]
  memberships Membership[]
+ idempotency_records IdempotencyRecord[] @relation("IdempotencyActor")
+ targeted_idempotency_records IdempotencyRecord[] @relation("IdempotencyTarget")
+ sent_invitations OrganizationInvitation[] @relation("Inviter")
+ received_invitations OrganizationInvitation[] @relation("Invitee")
  @@map("users")
 }
 model Organization {
@@ -27,6 +31,8 @@ model Organization {
  creator User @relation(fields:[created_by],references:[id],onDelete:Restrict)
  memberships Membership[]
  roles Role[]
+ idempotency_records IdempotencyRecord[]
+ invitations OrganizationInvitation[]
  @@map("organizations")
 }
 model Membership {
@@ -35,11 +41,50 @@ model Membership {
  user_id String @db.Uuid
  status String @default("ACTIVE")
  joined_at DateTime @default(now()) @db.Timestamptz(6)
+ membership_revision BigInt @default(1)
  organization Organization @relation(fields:[organization_id],references:[id],onDelete:Restrict)
  user User @relation(fields:[user_id],references:[id],onDelete:Restrict)
  assignments MembershipRole[]
  @@unique([organization_id,user_id])
  @@map("memberships")
+}
+model IdempotencyRecord {
+ id String @id @default(uuid()) @db.Uuid
+ actor_user_id String @db.Uuid
+ operation String
+ idempotency_key String @db.VarChar(128)
+ request_hash String @db.Char(64)
+ target_organization_id String @db.Uuid
+ target_user_id String? @db.Uuid
+ target_invitation_id String? @db.Uuid
+ target_invitation OrganizationInvitation? @relation(fields:[target_invitation_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ response_status Int
+ response_body Json
+ completed_at DateTime @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ actor User @relation("IdempotencyActor",fields:[actor_user_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ target_organization Organization @relation(fields:[target_organization_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ target_user User? @relation("IdempotencyTarget",fields:[target_user_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ @@unique([actor_user_id,operation,idempotency_key])
+ @@index([expires_at])
+ @@map("idempotency_records")
+}
+model OrganizationInvitation {
+ id String @id @default(uuid()) @db.Uuid
+ organization_id String @db.Uuid
+ inviter_user_id String @db.Uuid
+ invitee_user_id String @db.Uuid
+ roles Json
+ status String @default("PENDING")
+ created_at DateTime @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ processed_at DateTime? @db.Timestamptz(6)
+ organization Organization @relation(fields:[organization_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ inviter User @relation("Inviter",fields:[inviter_user_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ invitee User @relation("Invitee",fields:[invitee_user_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ idempotency_records IdempotencyRecord[]
+ @@index([invitee_user_id,created_at(sort: Desc),id(sort: Desc)],map:"organization_invitations_inbox_idx")
+ @@map("organization_invitations")
 }
 model Role {
  id String @id @default(uuid()) @db.Uuid

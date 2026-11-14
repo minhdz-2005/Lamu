@@ -1,0 +1,50 @@
+# Optional REST Client collection; manual execution NOT RUN.
+# Supply tokens/email/IDs through local process environment; never save tokens here.
+# Use distinct PENDING invitations for accept, decline and revoke.
+# Keep keys for replay; change keys deliberately for a new business request.
+@base = http://localhost:8080/api
+@owner = {{$processEnv P6_OWNER_ACCESS_TOKEN}}
+@recipient = {{$processEnv P6_RECIPIENT_ACCESS_TOKEN}}
+@org = {{$processEnv P6_ORGANIZATION_ID}}
+@email = {{$processEnv P6_RECIPIENT_EMAIL}}
+
+### OWNER invites an existing ACTIVE user, snapshot ADMIN scoped to this org
+# @name createInvitation
+POST {{base}}/organizations/{{org}}/members/invitations
+Authorization: Bearer {{owner}}
+Idempotency-Key: p6-local-create-01
+Content-Type: application/json
+
+{"email":"{{email}}","roles":[{"code":"ADMIN","resource_type":"ORG","resource_id":"{{org}}"}]}
+
+### Recipient inbox, no email/contact data
+GET {{base}}/users/me/invitations?limit=20&offset=0
+Authorization: Bearer {{recipient}}
+
+### Recipient accepts server snapshot, repeat same key to replay
+POST {{base}}/users/me/invitations/{{createInvitation.response.body.invitation_id}}/accept
+Authorization: Bearer {{recipient}}
+Idempotency-Key: p6-local-accept-01
+Content-Type: application/json
+
+{}
+
+### Recipient profile now includes membership (role codes are for display)
+GET {{base}}/users/me
+Authorization: Bearer {{recipient}}
+
+### Recipient declines a separate PENDING invitation
+POST {{base}}/users/me/invitations/{{$processEnv P6_DECLINE_INVITATION_ID}}/decline
+Authorization: Bearer {{recipient}}
+Idempotency-Key: p6-local-decline-01
+Content-Type: application/json
+
+{}
+
+### Any current OWNER revokes a separate PENDING invitation in the same org
+POST {{base}}/organizations/{{org}}/members/invitations/{{$processEnv P6_REVOKE_INVITATION_ID}}/revoke
+Authorization: Bearer {{owner}}
+Idempotency-Key: p6-local-revoke-01
+Content-Type: application/json
+
+{}
