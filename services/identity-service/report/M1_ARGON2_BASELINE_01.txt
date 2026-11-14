@@ -1,0 +1,41 @@
+Container limits: cpus=2, memory=256m; image Node 24.19.0-bookworm-slim
+> @lamu/identity@0.1.0 benchmark
+> tsx scripts/benchmark.ts
+
+{
+  "runtime": "v24.19.0",
+  "argon2": "0.45.2",
+  "platform": "linux",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 5 6600H with Radeon Graphics",
+  "visible_cpus": 12,
+  "visible_memory_bytes": 7900774400,
+  "parameters": {
+    "type": 2,
+    "memoryCost": 19456,
+    "timeCost": 2,
+    "parallelism": 1
+  },
+  "measured_at": "2026-11-13T04:50:31.800Z",
+  "results": [
+    {
+      "concurrency": 1,
+      "count": 20,
+      "p50_ms": 35.66331000000014,
+      "p95_ms": 53.082861000000094,
+      "elapsed_ms": 760.105261,
+      "errors": 0,
+      "error_rate": 0
+    },
+    {
+      "concurrency": 4,
+      "count": 20,
+      "p50_ms": 98.7995719999999,
+      "p95_ms": 110.64371300000016,
+      "elapsed_ms": 523.4511440000001,
+      "errors": 0,
+      "error_rate": 0
+    }
+  ],
+  "scope": "hash + verify, 1 warmup, synthetic input, baseline only; no SLA"
+}

@@ -70,6 +70,9 @@ Mặc định mọi bảng và endpoint trong §3 là MUST. Chỉ những mục 
 | `role_permissions` | `role_id UUID`, `permission_id UUID`, unique cặp; FK nội bộ |
 | `membership_roles` | `membership_id UUID`, `role_id UUID`, `resource_type TEXT NULL`, `resource_id UUID NULL` |
 | `refresh_sessions` | `id UUID PK`, `user_id UUID`, `token_hash TEXT`, `expires_at TIMESTAMPTZ`, `revoked_at TIMESTAMPTZ NULL` |
+| `outbox_events` (M1) | `event_id UUID PK`, `event_type`, `version`, `occurred_at TIMESTAMPTZ`, `aggregate_type`, `aggregate_id UUID`, `producer`, `payload JSONB`, `status PENDING/SENT`; UserRegistered ghi cùng transaction user từ M1, worker M3 |
+
+M1 Auth/Gateway đã chốt theo [ADR 0002](adr/0002-m1-auth-gateway.md) và [contract M1](api/catalog.md). Tám bảng nền cộng outbox; CITEXT/UUID/FK nội bộ, scope CHECK và unique NULLS NOT DISTINCT được quản lý bằng migration. Refresh session có created_at, hash unique và CHECK expires_at > created_at. Gateway thêm verified X-Session-Id cùng X-User-Id; service giữ network trust local. M1 không mở rộng tính năng organization/invitation M2, worker M3 hoặc frontend/Event M4.
 
 **RBAC:** Owner cấp organization quản lý cấu hình, thành viên và sự kiện. Admin có các permission quản trị được gán. Speaker là role cấp event với quyền giới hạn. Attendee là người mua vé, không có permission quản trị. Quyền phải khớp cả role/action lẫn phạm vi resource. Bảng permission và role seed ở §3.1.1; Speaker/Attendee không có endpoint riêng (quyết định 5).
 

@@ -1,0 +1,44 @@
+{
+  "name": "lamu-backend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "workspaces": [
+    "gateway",
+    "services/identity-service",
+    "shared/libraries/runtime"
+  ],
+  "engines": {
+    "node": ">=24.11 <25"
+  },
+  "scripts": {
+    "build": "npm run build -w @lamu/runtime && npm run build -w @lamu/identity && npm run build -w @lamu/gateway",
+    "typecheck": "npm run build && tsc --noEmit -p tsconfig.tests.json",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --coverage",
+    "generate:contracts": "openapi-typescript shared/contracts/http/identity.openapi.json -o shared/contracts/http/generated/identity.d.ts",
+    "contracts:check": "node scripts/check-contracts.cjs",
+    "test:m1": "node scripts/test-db.cjs --migrate --seed --coverage",
+    "test:compose": "node scripts/compose-smoke.cjs",
+    "format:check": "prettier --check \"gateway/src/**/*.ts\" services/identity-service/src/app.ts services/identity-service/src/database.ts services/identity-service/src/main.ts \"services/identity-service/src/common/**/*.ts\" \"services/identity-service/src/modules/**/*.ts\" \"shared/libraries/runtime/src/*.ts\" \"tests/**/*.ts\" \"tests/**/*.cjs\" \"scripts/*.cjs\""
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "12.1.0",
+    "@nestjs/testing": "11.2.10",
+    "@types/express": "5.0.6",
+    "@types/jest": "30.0.0",
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.6",
+    "@types/supertest": "6.0.3",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "jest": "30.5.2",
+    "openapi-typescript": "7.10.1",
+    "prettier": "3.6.2",
+    "supertest": "7.2.2",
+    "ts-jest": "29.4.15",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

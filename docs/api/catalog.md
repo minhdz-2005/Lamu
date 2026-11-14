@@ -22,6 +22,24 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 
 ## 1. Identity & Organization Service (`identity_db`)
 
+### M1 đã chốt ngày 13/11/2026
+
+M1 áp dụng [ADR 0002](../adr/0002-m1-auth-gateway.md). Contract HTTP máy kiểm được là [Identity OpenAPI](../../shared/contracts/http/identity.openapi.json); [Gateway OpenAPI](../../shared/contracts/http/gateway.openapi.json) là projection thêm `/api` có kiểm tra, không định nghĩa payload riêng. Người dùng đã xác nhận các đề xuất P0 trong phiên triển khai; không suy các contract M2–M4 đã được duyệt.
+
+Các quy định sau ghi đè quy ước chung cũ **chỉ cho M1**:
+
+- Gateway verify HS256, issuer/audience/expiry và claims; tự gán `X-User-Id=sub`, `X-Session-Id=sid`. Không forward header danh tính client; từ chối nhiều Authorization. Identity tin context trong network local, không tự verify JWT, không publish cổng host. Public auth không nhận context client. Request ID duy nhất là UUID hợp lệ hoặc được sinh mới.
+- Register/login/refresh/logout success **200**, không yêu cầu `Idempotency-Key`. Register dựa email unique; login tạo phiên mới; refresh rotation nguyên tử; logout có retry cùng phiên. JSON token trả `expires_in:900`.
+- Email trim, tối đa 254 ký tự; password 8–128 ký tự không trim; display_name trim 1–100 ký tự; field thừa bị từ chối. Refresh token base64url 43 ký tự từ 32 byte ngẫu nhiên, chỉ lưu SHA-256.
+- Logout cần access JWT + refresh hiện hành đúng user/sid. Sai cặp hoặc token đã rotation: 401 UNAUTHENTICATED, không thay phiên nào. Retry cặp đã revoke còn hạn: 200 OK, giữ revoked_at lần đầu. Giữ row/hash ít nhất expires_at + 15 phút, M1 không cleanup. Access đã cấp có thể còn dùng tới exp; không cam kết revoke access tức thời.
+- Credential hợp lệ nhưng user LOCKED: login/refresh/users-me trả 403 FORBIDDEN; credential sai/hết hạn vẫn 401. Profile chỉ trả memberships ACTIVE và role code để hiển thị, không thay authorization scope M2.
+- `/healthz` là liveness; `/readyz` trả 200 khi DB reachable, DB down trả 503 SERVICE_UNAVAILABLE. Config không hợp lệ dừng startup. Gateway readiness kiểm Identity readiness. Không route health của Identity ra public qua `/api`.
+- Upstream lỗi kết nối: 502 UPSTREAM_UNAVAILABLE; timeout hữu hạn: 504 UPSTREAM_TIMEOUT; không tự retry mutation. Thêm 429 RATE_LIMITED và 500 INTERNAL_ERROR, giữ error envelope chung và request ID.
+- Register ghi user + UserRegistered v1 cùng transaction vào `outbox_events` từ M1. Không phụ thuộc RabbitMQ; seed local không phát event, worker M3.
+- Swagger public ở Gateway `/docs`, JSON `/docs-json`; không có operation internal có thể thực thi qua Gateway.
+
+Các dòng M1 ở bảng dưới được đọc cùng contract đã chốt này. Mục M2/invitation vẫn theo sổ quyết định và kế hoạch, không tự freeze từ thay đổi M1.
+
 | API | Làm gì | Vào → Ra | Lỗi | Quyền | Event / bảng ghi |
 |---|---|---|---|---|---|
 | `POST /auth/register` | Tạo tài khoản, băm mật khẩu | `{email, password, display_name}` → `{user_id}` | 409 email tồn tại, 400 | Công khai | ghi `users`; phát `UserRegistered` |

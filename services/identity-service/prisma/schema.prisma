@@ -1,0 +1,106 @@
+generator client {
+ provider = "prisma-client"
+ output = "../src/generated"
+ moduleFormat = "cjs"
+}
+datasource db {
+ provider = "postgresql"
+}
+model User {
+ id String @id @default(uuid()) @db.Uuid
+ email String @unique @db.Citext
+ display_name String
+ password_hash String
+ status String @default("ACTIVE")
+ created_at DateTime @default(now()) @db.Timestamptz(6)
+ updated_at DateTime @updatedAt @db.Timestamptz(6)
+ sessions RefreshSession[]
+ organizations Organization[]
+ memberships Membership[]
+ @@map("users")
+}
+model Organization {
+ id String @id @default(uuid()) @db.Uuid
+ name String
+ slug String @unique
+ created_by String @db.Uuid
+ creator User @relation(fields:[created_by],references:[id],onDelete:Restrict)
+ memberships Membership[]
+ roles Role[]
+ @@map("organizations")
+}
+model Membership {
+ id String @id @default(uuid()) @db.Uuid
+ organization_id String @db.Uuid
+ user_id String @db.Uuid
+ status String @default("ACTIVE")
+ joined_at DateTime @default(now()) @db.Timestamptz(6)
+ organization Organization @relation(fields:[organization_id],references:[id],onDelete:Restrict)
+ user User @relation(fields:[user_id],references:[id],onDelete:Restrict)
+ assignments MembershipRole[]
+ @@unique([organization_id,user_id])
+ @@map("memberships")
+}
+model Role {
+ id String @id @default(uuid()) @db.Uuid
+ organization_id String? @db.Uuid
+ code String
+ name String
+ scope String
+ organization Organization? @relation(fields:[organization_id],references:[id],onDelete:Restrict)
+ permissions RolePermission[]
+ assignments MembershipRole[]
+ @@unique([organization_id,code])
+ @@map("roles")
+}
+model Permission {
+ id String @id @default(uuid()) @db.Uuid
+ code String @unique
+ description String
+ roles RolePermission[]
+ @@map("permissions")
+}
+model RolePermission {
+ role_id String @db.Uuid
+ permission_id String @db.Uuid
+ role Role @relation(fields:[role_id],references:[id],onDelete:Restrict)
+ permission Permission @relation(fields:[permission_id],references:[id],onDelete:Restrict)
+ @@id([role_id,permission_id])
+ @@map("role_permissions")
+}
+model MembershipRole {
+ id String @id @default(uuid()) @db.Uuid
+ membership_id String @db.Uuid
+ role_id String @db.Uuid
+ resource_type String
+ resource_id String? @db.Uuid
+ membership Membership @relation(fields:[membership_id],references:[id],onDelete:Restrict)
+ role Role @relation(fields:[role_id],references:[id],onDelete:Restrict)
+ @@unique([membership_id,role_id,resource_type,resource_id])
+ @@map("membership_roles")
+}
+model RefreshSession {
+ id String @id @default(uuid()) @db.Uuid
+ user_id String @db.Uuid
+ token_hash String @unique
+ created_at DateTime @default(now()) @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ revoked_at DateTime? @db.Timestamptz(6)
+ user User @relation(fields:[user_id],references:[id],onDelete:Restrict)
+ @@index([user_id])
+ @@map("refresh_sessions")
+}
+model OutboxEvent {
+ event_id String @id @db.Uuid
+ event_type String
+ version Int
+ occurred_at DateTime @db.Timestamptz(6)
+ aggregate_type String
+ aggregate_id String @db.Uuid
+ producer String
+ payload Json
+ status String @default("PENDING")
+ @@index([status,occurred_at])
+ @@map("outbox_events")
+}
+

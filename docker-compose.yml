@@ -1,5 +1,62 @@
 name: lumasoa
 services:
+  identity-migrate:
+    profiles: [m1]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+      target: tools
+    command: ["npm", "run", "db:deploy", "-w", "@lamu/identity"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+    depends_on:
+      identity-db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+  identity-service:
+    profiles: [m1]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 bytes}
+      JWT_ISSUER: ${JWT_ISSUER:-lumasoa}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lumasoa-frontend}
+      APP_ENV: ${APP_ENV:-local}
+      HTTP_LOG: "1"
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+    networks: [backend]
+  gateway:
+    profiles: [m1]
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      IDENTITY_URL: http://identity-service:8080
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 bytes}
+      JWT_ISSUER: ${JWT_ISSUER:-lumasoa}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lumasoa-frontend}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-3000}
+      HTTP_LOG: "1"
+    ports: ["${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"]
+    depends_on:
+      identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+    networks: [backend]
   identity-db:
     image: postgres:16-alpine
     environment:
@@ -79,9 +136,8 @@ services:
       retries: 10
     networks: [backend]
 
-# This repository currently contains architecture/docs scaffolding, not runnable
-# application images. Add gateway and service build targets here as their
-# Dockerfiles and implementations are created. Keep their ports internal.
+# M1: docker compose --profile m1 up --build gateway
+# Only explicitly targeted services/dependencies start in this mode; no broker.
 networks:
   backend:
     driver: bridge

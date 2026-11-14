@@ -1,0 +1,32 @@
+@base = http://localhost:8080/api
+@access_token = paste_current_access_token_here
+@refresh_token = paste_current_refresh_token_here
+
+### Register (synthetic local-only input)
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{"email":"swagger@example.test","password":"SyntheticPassword!2026","display_name":"Swagger"}
+
+### Login (capture tokens in memory / your HTTP client, never commit them)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"swagger@example.test","password":"SyntheticPassword!2026"}
+
+### Profile via Gateway
+GET {{base}}/users/me
+Authorization: Bearer {{access_token}}
+
+### Rotate; replace BOTH token variables from response
+POST {{base}}/auth/refresh
+Content-Type: application/json
+
+{"refresh_token":"{{refresh_token}}"}
+
+### Logout matching current pair
+POST {{base}}/auth/logout
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{"refresh_token":"{{refresh_token}}"}
