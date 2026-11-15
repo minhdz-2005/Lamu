@@ -420,10 +420,18 @@ describe("P5 transaction/race and explicit fixture Event resolver", () => {
     const f = await fixture(false),
       event = randomUUID();
     events.set(event, f.org);
+    await p.db.refreshSession.create({
+      data: {
+        id: f.a,
+        user_id: f.a,
+        token_hash: randomUUID(),
+        expires_at: new Date(Date.now() + 86400000),
+      },
+    });
     const res = await request(p.identity.getHttpServer())
       .put(`/organizations/${f.org}/members/${f.b}/roles`)
       .set("X-User-Id", f.a)
-      .set("X-Session-Id", randomUUID())
+      .set("X-Session-Id", f.a)
       .set("Idempotency-Key", randomUUID())
       .send({ roles: [e(event)] })
       .expect(200);
@@ -431,7 +439,7 @@ describe("P5 transaction/race and explicit fixture Event resolver", () => {
     const members = await request(p.identity.getHttpServer())
       .get(`/organizations/${f.org}/members`)
       .set("X-User-Id", f.a)
-      .set("X-Session-Id", randomUUID())
+      .set("X-Session-Id", f.a)
       .expect(200);
     contract("OrganizationMembers", members.body);
     const eventRow = await p.db.outboxEvent.findFirstOrThrow({

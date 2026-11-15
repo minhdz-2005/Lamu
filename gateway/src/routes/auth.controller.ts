@@ -5,6 +5,15 @@ import { JwtGuard, type VerifiedRequest } from "../auth/jwt.guard";
 @Controller("api/auth")
 export class AuthController {
   constructor(private readonly proxy: ProxyService) {}
+  @Post("forgot-password") forgot(@Req() req: Request, @Res() res: Response) {
+    return this.proxy.forward("/auth/forgot-password", req, res);
+  }
+  @Post("verify-reset-code") verify(@Req() req: Request, @Res() res: Response) {
+    return this.proxy.forward("/auth/verify-reset-code", req, res);
+  }
+  @Post("reset-password") reset(@Req() req: Request, @Res() res: Response) {
+    return this.proxy.forward("/auth/reset-password", req, res);
+  }
   @Post("register") register(@Req() req: Request, @Res() res: Response) {
     return this.proxy.forward("/auth/register", req, res);
   }

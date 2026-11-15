@@ -1,3 +1,4 @@
+import { mediaDisplay } from "../../media/cloudinary";
 import { Inject, Injectable } from "@nestjs/common";
 import { fail } from "@lamu/runtime";
 import { type Database, DATABASE } from "../../database";
@@ -11,10 +12,11 @@ export class UsersService {
     const user = await this.db.user.findUnique({
       where: { id },
       include: {
+        avatar_asset: true,
         memberships: {
           where: { status: "ACTIVE" },
           include: {
-            organization: true,
+            organization: { include: { cover_asset: true } },
             assignments: { include: { role: true } },
           },
           orderBy: { organization_id: "asc" },
@@ -27,10 +29,15 @@ export class UsersService {
       id: user.id,
       email: user.email,
       display_name: user.display_name,
+      avatar: mediaDisplay(user.avatar_asset, user.avatar_revision),
       memberships: user.memberships.map((m) => ({
         organization_id: m.organization_id,
         name: m.organization.name,
         slug: m.organization.slug,
+        cover: mediaDisplay(
+          m.organization.cover_asset,
+          m.organization.cover_revision,
+        ),
         roles: [
           ...new Set(m.assignments.map((a) => a.role.code as RoleCode)),
         ].sort(),

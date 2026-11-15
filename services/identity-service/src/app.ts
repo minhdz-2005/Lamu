@@ -11,6 +11,10 @@ import { type Config, setupHttp, fail } from "@lamu/runtime";
 import { createDatabase, type Database, DATABASE } from "./database";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
+import { SecurityModule } from "./security/security.module";
+import type { RecoveryConfig } from "./security/config";
+import { MediaModule } from "./media/media.module";
+import type { MediaConfig, MediaProvider } from "./media/cloudinary";
 import {
   OrganizationsModule,
   type OrganizationOptions,
@@ -41,6 +45,8 @@ export async function createIdentityApp(
   config: Config,
   database?: Database,
   organizations: OrganizationOptions = {},
+  security?: RecoveryConfig,
+  media?: { config: MediaConfig; provider?: MediaProvider },
 ) {
   const db = database ?? createDatabase(config.databaseUrl);
   @Module({
@@ -48,6 +54,10 @@ export async function createIdentityApp(
       AuthModule.register(config, db),
       UsersModule.register(db),
       OrganizationsModule.register(db, organizations),
+      ...(security ? [SecurityModule.register(db, security)] : []),
+      ...(media
+        ? [MediaModule.register(db, media.config, media.provider)]
+        : []),
     ],
     controllers: [HealthController],
     providers: [

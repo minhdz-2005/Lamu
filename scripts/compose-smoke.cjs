@@ -10,6 +10,7 @@ const p5 = process.argv.includes("--p5") || p6;
 const project = "lamu-m1-smoke-" + Date.now();
 const env = {
   ...process.env,
+  ...require("./security-test-env.cjs")(),
   JWT_SECRET: randomBytes(48).toString("hex"),
   POSTGRES_PASSWORD: randomBytes(24).toString("hex"),
   GATEWAY_PORT: "0",

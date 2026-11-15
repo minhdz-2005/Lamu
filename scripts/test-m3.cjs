@@ -11,6 +11,7 @@ const dir = "services/identity-service/report/M3_P7_RUN_" + project;
 fs.mkdirSync(dir, { recursive: false });
 const env = {
   ...process.env,
+  ...require("./security-test-env.cjs")(),
   JWT_SECRET: randomBytes(48).toString("hex"),
   POSTGRES_PASSWORD: randomBytes(24).toString("hex"),
   RABBITMQ_USER: "m3test",

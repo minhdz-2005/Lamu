@@ -2,7 +2,7 @@ import { Pool } from "pg";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 afterAll(() => pool.end());
 describe("P1 local seed", () => {
-  it("has exactly four system roles, ten permissions, two demo organizations and no events", async () => {
+  it("has exactly four system roles, eleven permissions, two demo organizations and no events", async () => {
     expect(
       Number(
         (
@@ -16,7 +16,7 @@ describe("P1 local seed", () => {
       Number(
         (await pool.query("SELECT count(*) FROM permissions")).rows[0].count,
       ),
-    ).toBe(10);
+    ).toBe(11);
     expect(
       Number(
         (
@@ -51,7 +51,7 @@ describe("P1 local seed", () => {
         "SELECT p.code FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.code='ADMIN'",
       )
     ).rows.map((r) => r.code);
-    expect(admin).toHaveLength(9);
+    expect(admin).toHaveLength(10);
     expect(admin).not.toContain("org.member.manage");
     const speaker = (
       await pool.query(

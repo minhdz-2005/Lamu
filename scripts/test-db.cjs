@@ -24,6 +24,7 @@ function run(bin, args, env = process.env) {
 }
 (async () => {
   let started = false;
+  let mailStarted = false;
   try {
     const password = randomBytes(24).toString("hex");
     run("docker", [
@@ -60,6 +61,50 @@ function run(bin, args, env = process.env) {
       RATE_LIMIT_MAX: "100000",
       AUTH_RATE_LIMIT_MAX: "100000",
     };
+    if (process.argv.includes("--cloudinary-smoke")) {
+      const configured = require("node:util").parseEnv(
+        require("node:fs").readFileSync(".env", "utf8"),
+      );
+      for (const key of [
+        "CLOUDINARY_CLOUD_NAME",
+        "CLOUDINARY_API_KEY",
+        "CLOUDINARY_API_SECRET",
+        "CLOUDINARY_AVATAR_UPLOAD_PRESET",
+        "CLOUDINARY_ORG_COVER_UPLOAD_PRESET",
+        "CLOUDINARY_ASSET_PREFIX",
+      ])
+        env[key] = configured[key];
+      env.REAL_CLOUDINARY_SMOKE = "1";
+    }
+    if (process.argv.includes("--security")) {
+      run("docker", [
+        "run",
+        "-d",
+        "--name",
+        name + "-mail",
+        "-p",
+        "127.0.0.1::1025",
+        "-p",
+        "127.0.0.1::8025",
+        "axllent/mailpit:v1.27.10",
+      ]);
+      mailStarted = true;
+      env.SMTP_HOST = "127.0.0.1";
+      env.SMTP_PORT = run("docker", ["port", name + "-mail", "1025/tcp"])
+        .split(":")
+        .pop();
+      env.MAILPIT_URL =
+        "http://127.0.0.1:" +
+        run("docker", ["port", name + "-mail", "8025/tcp"])
+          .split(":")
+          .pop();
+      env.SMTP_SECURE = "false";
+      env.SMTP_USER = "";
+      env.SMTP_PASSWORD = "";
+      env.MAIL_FROM = "Lamu Test <security@lamu.test>";
+      env.MAIL_JOB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+      env.PASSWORD_RESET_OTP_HMAC_KEY = randomBytes(32).toString("hex");
+    }
     const db = new Pool({
       connectionString: env.DATABASE_URL,
       connectionTimeoutMillis: 1000,
@@ -80,6 +125,24 @@ function run(bin, args, env = process.env) {
     const migrate = args.includes("--migrate");
     const seed = args.includes("--seed");
     if (migrate) run("npm", ["run", "db:deploy", "-w", "@lamu/identity"], env);
+    if (args.includes("--schema-check"))
+      run(
+        "npm",
+        [
+          "exec",
+          "-w",
+          "@lamu/identity",
+          "--",
+          "prisma",
+          "migrate",
+          "diff",
+          "--from-config-datasource",
+          "--to-schema",
+          "prisma/schema.prisma",
+          "--exit-code",
+        ],
+        env,
+      );
     if (seed) {
       run("npm", ["run", "db:seed", "-w", "@lamu/identity"], env);
       run("npm", ["run", "db:seed", "-w", "@lamu/identity"], env);
@@ -89,7 +152,16 @@ function run(bin, args, env = process.env) {
       [
         "test",
         "--",
-        ...args.filter((a) => !["--migrate", "--seed"].includes(a)),
+        ...args.filter(
+          (a) =>
+            ![
+              "--migrate",
+              "--seed",
+              "--security",
+              "--cloudinary-smoke",
+              "--schema-check",
+            ].includes(a),
+        ),
       ],
       env,
     );
@@ -97,6 +169,7 @@ function run(bin, args, env = process.env) {
     process.stderr.write(e.message + "\n");
     process.exitCode = 1;
   } finally {
+    if (mailStarted) run("docker", ["rm", "-f", name + "-mail"]);
     if (started) run("docker", ["rm", "-f", name]);
   }
 })();

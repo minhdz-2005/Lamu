@@ -21,7 +21,58 @@ model User {
  targeted_idempotency_records IdempotencyRecord[] @relation("IdempotencyTarget")
  sent_invitations OrganizationInvitation[] @relation("Inviter")
  received_invitations OrganizationInvitation[] @relation("Invitee")
+ challenges PasswordResetChallenge[]
+ avatar_asset_id String? @unique @db.Uuid
+ avatar_revision BigInt @default(0)
+ avatar_asset MediaAsset? @relation("UserAvatar",fields:[avatar_asset_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ upload_intents MediaUploadIntent[] @relation("IntentActor")
+ avatar_intents MediaUploadIntent[] @relation("AvatarTarget")
  @@map("users")
+}
+model PasswordResetChallenge {
+ id String @id @db.Uuid
+ user_id String @db.Uuid
+ user User @relation(fields:[user_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ code_digest String @db.Char(64)
+ generation String @unique @db.Uuid
+ created_at DateTime @default(now()) @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ failed_attempts Int @default(0)
+ verified_at DateTime? @db.Timestamptz(6)
+ consumed_at DateTime? @db.Timestamptz(6)
+ token_digest String? @unique @db.Char(64)
+ token_expires_at DateTime? @db.Timestamptz(6)
+ jobs SecurityMailJob[]
+ @@index([user_id,created_at])
+ @@index([expires_at])
+ @@map("password_reset_challenges")
+}
+model SecurityMailJob {
+ id String @id @db.Uuid
+ challenge_id String? @db.Uuid
+ challenge PasswordResetChallenge? @relation(fields:[challenge_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ generation String @db.Uuid
+ kind String
+ ciphertext String?
+ key_id String
+ status String @default("PENDING")
+ attempts Int @default(0)
+ next_attempt_at DateTime @default(now()) @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ lease_owner String? @db.Uuid
+ lease_until DateTime? @db.Timestamptz(6)
+ created_at DateTime @default(now()) @db.Timestamptz(6)
+ finished_at DateTime? @db.Timestamptz(6)
+ @@index([status,next_attempt_at])
+ @@index([expires_at])
+ @@map("security_mail_jobs")
+}
+model SecurityRateBucket {
+ key String @id @db.Char(64)
+ count Int
+ expires_at DateTime @db.Timestamptz(6)
+ @@index([expires_at])
+ @@map("security_rate_buckets")
 }
 model Organization {
  id String @id @default(uuid()) @db.Uuid
@@ -33,7 +84,63 @@ model Organization {
  roles Role[]
  idempotency_records IdempotencyRecord[]
  invitations OrganizationInvitation[]
+ cover_asset_id String? @unique @db.Uuid
+ cover_revision BigInt @default(0)
+ cover_asset MediaAsset? @relation("OrganizationCover",fields:[cover_asset_id],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ cover_intents MediaUploadIntent[]
  @@map("organizations")
+}
+model MediaAsset {
+ id String @id @db.Uuid
+ asset_id String @unique
+ public_id String @unique
+ version BigInt
+ secure_url String
+ display_url String
+ format String
+ bytes Int
+ width Int
+ height Int
+ status String @default("ACTIVE")
+ avatar_user User? @relation("UserAvatar")
+ cover_organization Organization? @relation("OrganizationCover")
+ intent MediaUploadIntent?
+ @@map("media_assets")
+}
+model MediaUploadIntent {
+ id String @id @db.Uuid
+ actor_id String @db.Uuid
+ actor User @relation("IntentActor",fields:[actor_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+ user_id String? @db.Uuid
+ user User? @relation("AvatarTarget",fields:[user_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+ organization_id String? @db.Uuid
+ organization Organization? @relation(fields:[organization_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+ purpose String
+ expected_public_id String @unique
+ expected_revision BigInt
+ created_at DateTime @default(now()) @db.Timestamptz(6)
+ expires_at DateTime @db.Timestamptz(6)
+ watch_until DateTime @db.Timestamptz(6)
+ state String @default("PENDING")
+ committed_at DateTime? @db.Timestamptz(6)
+ asset_id String? @unique @db.Uuid
+ asset MediaAsset? @relation(fields:[asset_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+ result Json?
+ cleanup MediaCleanupJob?
+ @@index([actor_id,expires_at])
+ @@map("media_upload_intents")
+}
+model MediaCleanupJob {
+ id String @id @db.Uuid
+ intent_id String @unique @db.Uuid
+ intent MediaUploadIntent @relation(fields:[intent_id],references:[id],onDelete:NoAction,onUpdate:NoAction)
+ status String @default("PENDING")
+ attempts Int @default(0)
+ next_attempt_at DateTime @db.Timestamptz(6)
+ lease_owner String? @db.Uuid
+ lease_until DateTime? @db.Timestamptz(6)
+ @@index([status,next_attempt_at])
+ @@map("media_cleanup_jobs")
 }
 model Membership {
  id String @id @default(uuid()) @db.Uuid

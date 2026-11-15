@@ -1,3 +1,4 @@
+import { transactionRetry } from "../../common/transaction";
 import { Inject, Injectable } from "@nestjs/common";
 import { type Config, fail } from "@lamu/runtime";
 import { hash, verify, argon2id } from "argon2";
@@ -34,7 +35,7 @@ export class AuthService {
       eventId = randomUUID(),
       at = this.now();
     try {
-      await this.db.$transaction(async (tx) => {
+      await transactionRetry(this.db, async (tx) => {
         const user = await tx.user.create({
           data: {
             id: userId,
@@ -82,19 +83,33 @@ export class AuthService {
     if (user.status !== "ACTIVE") fail(403, "FORBIDDEN", "Account unavailable");
     const token = refreshToken(),
       at = this.now();
-    const session = await this.db.refreshSession.create({
-      data: {
-        id: randomUUID(),
-        user_id: user.id,
-        token_hash: tokenHash(token),
-        created_at: at,
-        expires_at: new Date(at.getTime() + 7 * 86400000),
-      },
+    const session = await transactionRetry(this.db, async (tx) => {
+      const locked = await tx.$queryRaw<
+        Array<{ password_hash: string; status: string }>
+      >`SELECT password_hash,status FROM users WHERE id=${user.id}::uuid FOR UPDATE`;
+      if (locked[0]?.password_hash !== user.password_hash)
+        fail(401, "UNAUTHENTICATED", "Invalid credentials");
+      if (locked[0].status !== "ACTIVE")
+        fail(403, "FORBIDDEN", "Account unavailable");
+      return tx.refreshSession.create({
+        data: {
+          id: randomUUID(),
+          user_id: user.id,
+          token_hash: tokenHash(token),
+          created_at: at,
+          expires_at: new Date(at.getTime() + 7 * 86400000),
+        },
+      });
     });
     return this.tokens(user.id, session.id, token, at);
   }
   async refresh(token: string): Promise<components["schemas"]["Tokens"]> {
-    return this.db.$transaction(async (tx) => {
+    const found = await this.db.refreshSession.findUnique({
+      where: { token_hash: tokenHash(token) },
+    });
+    if (!found) fail(401, "UNAUTHENTICATED", "Invalid refresh token");
+    return transactionRetry(this.db, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id=${found.user_id}::uuid FOR UPDATE`;
       const rows = await tx.$queryRaw<
         Array<{
           id: string;
@@ -103,7 +118,7 @@ export class AuthService {
           revoked_at: Date | null;
           user_status: string;
         }>
-      >`SELECT s.id,s.user_id,s.expires_at,s.revoked_at,u.status AS user_status FROM refresh_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=${tokenHash(token)} FOR UPDATE OF s,u`;
+      >`SELECT s.id,s.user_id,s.expires_at,s.revoked_at,u.status AS user_status FROM refresh_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=${tokenHash(token)} FOR UPDATE OF s`;
       const session = rows[0],
         at = this.now();
       if (
@@ -126,7 +141,7 @@ export class AuthService {
     token: string,
     identity: { sub: string; sid: string },
   ): Promise<components["schemas"]["LoggedOut"]> {
-    return this.db.$transaction(async (tx) => {
+    return transactionRetry(this.db, async (tx) => {
       const rows = await tx.$queryRaw<
         Array<{
           id: string;

@@ -6,6 +6,8 @@ Trạng thái P8 14/11/2026: **M1/M2/M3 local đã triển khai; gói chuẩn b�
 
 M1 đã có backend NestJS/Prisma và Gateway. Phạm vi: register/login, JWT/profile, refresh/logout, UserRegistered outbox nguyên tử. Organization/RBAC API M2, worker RabbitMQ M3 và frontend/Event thật M4 chưa triển khai trong M1. Xem [báo cáo tổng](report/REPORT_M1_AUTH_GATEWAY_01.md) để phân biệt kiểm thử tự động với phần NOT RUN.
 
+Recovery OTP email và avatar/organization cover Cloudinary đã triển khai backend P0–P5 ngày 15/11/2026, contract v1.4.0. Xem [runbook/API](../../docs/integration/media-password-recovery.md), [báo cáo kiểm thử](report/REPORT_MEDIA_RECOVERY_01.md) và [request mẫu](requests/media-recovery.http). Khởi động thêm `identity-mail-worker` và `identity-media-cleanup-worker`; không cần RabbitMQ/Notification cho hai chức năng này. Các ghi chú M1 về access tồn tại sau logout được thay bằng session validation tức thời.
+
 ## Chạy local
 
 M2/P5 tiếp nối M1 đã triển khai organization/read/member/role replacement, internal authorization và public user profile theo [ADR 0003](../../docs/adr/0003-m2-p5-organization-rbac.md). Phạm vi/bằng chứng: [P0](report/REPORT_M2_P0_CONTRACT_01.md), [P5](report/REPORT_M2_P5_ORGANIZATION_RBAC_01.md). P6 invitation triển khai theo ADR 0004; M2 đã nghiệm thu, manual Swagger/DOC-01 PASS theo xác nhận người dùng; xem [báo cáo nghiệm thu](report/REPORT_M2_ACCEPTANCE_01.md).

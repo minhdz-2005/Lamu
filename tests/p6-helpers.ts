@@ -21,6 +21,15 @@ export async function fixture(p: Pair) {
   const owner = await make(),
     recipient = await make(),
     other = await make();
+  for (const u of [owner, recipient, other])
+    await p.db.refreshSession.create({
+      data: {
+        id: u.id,
+        user_id: u.id,
+        token_hash: randomUUID(),
+        expires_at: new Date(Date.now() + 86400000),
+      },
+    });
   const result = await p.identity
     .get(OrganizationsService)
     .create(owner.id, randomUUID(), { name: "P6", slug: "p6-" + randomUUID() });
@@ -34,7 +43,7 @@ export async function fixture(p: Pair) {
     const r = request(p.identity.getHttpServer())
       .post(path)
       .set("X-User-Id", actor)
-      .set("X-Session-Id", randomUUID());
+      .set("X-Session-Id", actor);
     if (key) r.set("Idempotency-Key", key);
     return r.send(body);
   };

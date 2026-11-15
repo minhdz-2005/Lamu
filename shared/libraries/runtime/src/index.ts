@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response, NextFunction } from "express";
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 
@@ -25,6 +26,8 @@ export interface Config {
   appEnv: string;
   rateLimit: number;
   authRateLimit: number;
+  trustedProxies?: string[];
+  mediaTimeoutMs?: number;
 }
 export function validateConfig(
   env: NodeJS.ProcessEnv,
@@ -52,6 +55,23 @@ export function validateConfig(
     throw new Error("Missing JWT issuer/audience");
   const databaseUrl = env.DATABASE_URL ?? "";
   const identityUrl = env.IDENTITY_URL ?? "";
+  const trustedProxies = (env.GATEWAY_TRUSTED_PROXY_CIDRS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const cidr of trustedProxies) {
+    const [ip, mask, ...rest] = cidr.split("/"),
+      family = isIP(ip);
+    if (
+      !family ||
+      rest.length ||
+      (mask !== undefined &&
+        (!/^\d+$/.test(mask) ||
+          Number(mask) < 1 ||
+          Number(mask) > (family === 4 ? 32 : 128)))
+    )
+      throw new Error("Invalid GATEWAY_TRUSTED_PROXY_CIDRS");
+  }
   if (kind === "identity") {
     const database = new URL(databaseUrl);
     if (
@@ -84,6 +104,8 @@ export function validateConfig(
     appEnv: env.APP_ENV ?? "production",
     rateLimit: integer("RATE_LIMIT_MAX", 100, 1, 100000),
     authRateLimit: integer("AUTH_RATE_LIMIT_MAX", 20, 1, 100000),
+    trustedProxies,
+    mediaTimeoutMs: integer("MEDIA_UPSTREAM_TIMEOUT_MS", 8000, 1, 60000),
   };
 }
 export function fail(status: number, code: string, message: string): never {
@@ -106,6 +128,8 @@ export class ErrorFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
     const status = error instanceof HttpException ? error.getStatus() : 500;
+    if (status === 429 && !res.hasHeader("Retry-After"))
+      res.setHeader("Retry-After", "60");
     const body = error instanceof HttpException ? error.getResponse() : null;
     const custom =
       body && typeof body === "object" && "code" in body

@@ -4,6 +4,14 @@ const template = fs.readFileSync(".env.example", "utf8");
 const value = template
   .replace(/^JWT_SECRET=.*$/m, "JWT_SECRET=" + randomBytes(48).toString("hex"))
   .replace(
+    /^PASSWORD_RESET_OTP_HMAC_KEY=.*$/m,
+    "PASSWORD_RESET_OTP_HMAC_KEY=" + randomBytes(32).toString("hex"),
+  )
+  .replace(
+    /^MAIL_JOB_ENCRYPTION_KEY=.*$/m,
+    "MAIL_JOB_ENCRYPTION_KEY=" + randomBytes(32).toString("hex"),
+  )
+  .replace(
     /^POSTGRES_PASSWORD=.*$/m,
     "POSTGRES_PASSWORD=" + randomBytes(24).toString("hex"),
   );

@@ -468,7 +468,7 @@ describe("P6 PostgreSQL transaction, replay, expiry and Event fixture", () => {
         .default(normal.identity.getHttpServer())
         .post(`/users/me/invitations/${id}/accept`)
         .set("X-User-Id", f.recipient.id)
-        .set("X-Session-Id", randomUUID())
+        .set("X-Session-Id", f.recipient.id)
         .set("Idempotency-Key", randomUUID())
         .send({});
       expect(r.body.error.code).toBe("EVENT_SCOPE_UNVERIFIED");

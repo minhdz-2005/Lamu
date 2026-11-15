@@ -1,3 +1,4 @@
+import { mediaDisplay } from "../../media/cloudinary";
 import { Inject, Injectable, HttpException } from "@nestjs/common";
 import { fail, UUID } from "@lamu/runtime";
 import { randomUUID, createHash } from "node:crypto";
@@ -80,6 +81,7 @@ export class OrganizationsService {
     const row = await this.db.organization.findUniqueOrThrow({
       where: { id: org },
       include: {
+        cover_asset: true,
         memberships: {
           where: { user_id: actor },
           include: { assignments: { include: { role: true } } },
@@ -90,6 +92,7 @@ export class OrganizationsService {
       id: row.id,
       name: row.name,
       slug: row.slug,
+      cover: mediaDisplay(row.cover_asset, row.cover_revision),
       my_roles: [
         ...new Set(
           this.assignments(row.memberships[0].assignments, org).map(
@@ -142,19 +145,38 @@ export class OrganizationsService {
   ): Promise<components["schemas"]["PublicOrganization"]> {
     const row = await this.db.organization.findUnique({
       where: { slug },
-      select: { name: true, slug: true },
+      select: {
+        name: true,
+        slug: true,
+        cover_asset: true,
+        cover_revision: true,
+      },
     });
     if (!row) fail(404, "NOT_FOUND", "Organization unavailable");
-    return row;
+    return {
+      name: row.name,
+      slug: row.slug,
+      cover: mediaDisplay(row.cover_asset, row.cover_revision),
+    };
   }
   async publicUser(id: string): Promise<components["schemas"]["PublicUser"]> {
     const row = await this.db.user.findUnique({
       where: { id },
-      select: { id: true, display_name: true, status: true },
+      select: {
+        id: true,
+        display_name: true,
+        status: true,
+        avatar_asset: true,
+        avatar_revision: true,
+      },
     });
     if (!row || row.status !== "ACTIVE")
       fail(404, "NOT_FOUND", "User unavailable");
-    return { id: row.id, display_name: row.display_name };
+    return {
+      id: row.id,
+      display_name: row.display_name,
+      avatar: mediaDisplay(row.avatar_asset, row.avatar_revision),
+    };
   }
   private async lockOrg(tx: Transaction, org: string) {
     try {

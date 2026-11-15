@@ -133,10 +133,13 @@ describe("P4 Gateway failure/security boundaries", () => {
         .set("x-user-id", randomUUID() + "," + randomUUID())
         .set("x-session-id", randomUUID())
         .set("x-role", "OWNER")
+        .set("x-client-ip", "203.0.113.99")
+        .set("x-forwarded-for", "203.0.113.98")
         .expect(200);
       expect(seen["x-user-id"]).toBe(sub);
       expect(seen["x-session-id"]).toBe(sid);
       expect(seen["x-role"]).toBeUndefined();
+      expect(String(seen["x-client-ip"])).toMatch(/127\.0\.0\.1/);
       expect(seen.authorization).toBe("Bearer " + token);
     } finally {
       await app.close();

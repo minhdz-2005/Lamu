@@ -16,6 +16,8 @@ export class ProxyService {
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "x-request-id": String(res.getHeader("X-Request-Id")),
+      // Express trust proxy defaults to false. Client forwarding headers are ignored.
+      "x-client-ip": req.ip ?? req.socket.remoteAddress ?? "unknown",
     };
     if (
       (req.method === "POST" && path === "/organizations") ||
@@ -39,7 +41,13 @@ export class ProxyService {
       headers["x-session-id"] = context.sid;
       headers.authorization = req.headers.authorization!;
     }
-    const signal = AbortSignal.timeout(this.config.timeoutMs);
+    const media =
+      /^\/(users\/me\/avatar|organizations\/[^/]+\/cover)(\/upload-intents)?$/.test(
+        path,
+      );
+    const signal = AbortSignal.timeout(
+      media ? (this.config.mediaTimeoutMs ?? 8000) : this.config.timeoutMs,
+    );
     try {
       const upstream = await fetch(
         this.config.identityUrl.replace(/\/$/, "") + path,
@@ -54,6 +62,10 @@ export class ProxyService {
       const body = (await upstream.json()) as {
         error?: { code?: string; message?: string };
       };
+      for (const name of ["retry-after", "cache-control"]) {
+        const value = upstream.headers.get(name);
+        if (value) res.setHeader(name, value);
+      }
       if (body?.error) {
         body.error = {
           code: body.error.code,

@@ -23,7 +23,7 @@ describe("P6 invitation real API and PostgreSQL", () => {
     request(p.identity.getHttpServer())
       .get("/users/me/invitations" + query)
       .set("X-User-Id", actor)
-      .set("X-Session-Id", randomUUID());
+      .set("X-Session-Id", actor);
   it("has additive FK/partial uniqueness/lifecycle constraints", async () => {
     const f = await fixture(p);
     const x = await f.invite().expect(201);

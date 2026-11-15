@@ -86,7 +86,7 @@ describe("P4 session rotation/logout on PostgreSQL", () => {
     await request(p.gateway.getHttpServer())
       .get("/api/users/me")
       .set("Authorization", "Bearer " + A.access_token)
-      .expect(200);
+      .expect(401);
   });
   it("rejects old rotated refresh for logout; expired access can refresh before correct logout", async () => {
     const a = await account(),

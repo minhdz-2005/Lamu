@@ -371,7 +371,11 @@ describe("P5 real PostgreSQL organization API and RBAC", () => {
       .get("/internal/users/" + actor + "/public-profile")
       .expect(200);
     contract("PublicUser", profile.body);
-    expect(profile.body).toEqual({ id: actor, display_name: "Test User" });
+    expect(profile.body).toEqual({
+      id: actor,
+      display_name: "Test User",
+      avatar: { url: null, revision: "0" },
+    });
     await request(p.identity.getHttpServer())
       .get("/internal/users/" + randomUUID() + "/public-profile")
       .expect(404);

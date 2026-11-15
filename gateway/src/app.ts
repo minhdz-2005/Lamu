@@ -5,6 +5,7 @@ import { type Config, setupHttp, fail } from "@lamu/runtime";
 import { AuthController } from "./routes/auth.controller";
 import { ProxyService, GATEWAY_CONFIG } from "./routes/proxy.service";
 import { UsersController } from "./routes/users.controller";
+import { MediaController } from "./routes/media.controller";
 import { InvitationsController } from "./routes/invitations.controller";
 import {
   OrganizationsController,
@@ -37,6 +38,7 @@ export async function createGatewayApp(config: Config) {
       HealthController,
       AuthController,
       UsersController,
+      MediaController,
       InvitationsController,
       OrganizationsController,
       PublicOrganizationsController,
@@ -49,6 +51,13 @@ export async function createGatewayApp(config: Config) {
   })
   class GatewayModule {}
   const app = await NestFactory.create(GatewayModule, { logger: false });
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set(
+      "trust proxy",
+      config.trustedProxies?.length ? config.trustedProxies : false,
+    );
   setupHttp(app, config);
   const document = JSON.parse(
     readFileSync(

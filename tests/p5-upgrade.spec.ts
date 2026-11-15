@@ -72,10 +72,18 @@ describe("P5 additive migration on an existing M1 database", () => {
           display_name: "Clean",
         })
         .expect(200);
+      const session = await client.refreshSession.create({
+        data: {
+          id: randomUUID(),
+          user_id: registered.body.user_id,
+          token_hash: randomUUID(),
+          expires_at: new Date(Date.now() + 86400000),
+        },
+      });
       const created = await request(app.getHttpServer())
         .post("/organizations")
         .set("X-User-Id", registered.body.user_id)
-        .set("X-Session-Id", randomUUID())
+        .set("X-Session-Id", session.id)
         .set("Idempotency-Key", randomUUID())
         .send({ name: "Clean", slug: "clean" })
         .expect(201);

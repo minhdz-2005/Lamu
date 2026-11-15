@@ -10,7 +10,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "worker": "node dist/messaging/main.js",
-    "outbox:replay": "node dist/messaging/replay.js"
+    "outbox:replay": "node dist/messaging/replay.js",
+    "worker:mail": "node dist/security/mail.main.js",
+    "worker:media-cleanup": "node dist/media/cleanup.main.js"
   },
   "dependencies": {
     "@lamu/runtime": "0.1.0",
@@ -26,6 +28,7 @@
     "class-transformer": "0.5.1",
     "class-validator": "0.14.3",
     "jsonwebtoken": "9.0.2",
+    "nodemailer": "10.5.0",
     "pg": "8.16.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"

@@ -15,6 +15,7 @@ const permissions = [
   "event.cancel",
   "ticket.checkin",
   "payment.refund",
+  "org.profile.update",
 ];
 export async function seed() {
   if (process.env.APP_ENV !== "local")

@@ -8,6 +8,7 @@ export type Transaction = Prisma.TransactionClient;
 const matrix: Record<string, readonly string[]> = {
   ORG: [
     "org.read",
+    "org.profile.update",
     "org.member.read",
     "org.member.manage",
     "event.create",
