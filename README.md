@@ -1,11 +1,12 @@
 # Lamu
 
 Nền tảng quản lý sự kiện theo Microservices: tổ chức, sự kiện, RBAC đa cấp và đăng ký vé có kiểm soát đồng thời.
-Hào - identity service
-Ngân - event service
-Hậu - notification service
-Thảo - payment service
-minh - registration service
+
+Hào - identity service,
+Ngân - event service,
+Hậu - notification service,
+Thảo - payment service,
+minh - registration service,
 
 ## Tài liệu
 - [Kiến trúc và kế hoạch tổng thể](architecture.md)
