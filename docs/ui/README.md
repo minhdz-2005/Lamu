@@ -25,7 +25,7 @@ Mỗi file tự chứa đủ thông tin để làm mà không phải đọc file
 | `/` | Không call API nào — trang tĩnh, chỉ link tới các route bên dưới |
 | `/auth` | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` |
 | `/events` | `GET /public/events` |
-| `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}` |
+| `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}`, và **một** `GET /users/me/tickets` ngay khi poll thấy `CONFIRMED` để lấy `code` (03 §5) |
 | `/me/tickets` | `GET /users/me`, `GET /users/me/tickets` |
 | `/organizer` | `GET /users/me`, `POST /organizations`, `POST /events`, `GET /organizations/{orgId}/events`, `POST /events/{id}/publish`, `POST /events/{id}/cancel`, `POST /events/{id}/ticket-types`, `GET /events/{id}/availability`, `GET /events/{id}/tickets`, `POST /tickets/check-in` |
 

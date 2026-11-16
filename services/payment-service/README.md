@@ -2,7 +2,7 @@
 
 Một câu: ghi nhận **một lượt giữ chỗ có phí đã trả hay chưa**, và hoàn tiền khi sự kiện bị hủy. Database: `payment_db`.
 
-`reservation_id`, `user_id`, `event_id` ở đây là ID tham chiếu, không có FK chéo.
+`reservation_id`, `user_id`, `event_id`, `organization_id` ở đây là ID tham chiếu, không có FK chéo.
 
 ## Phần này lo gì
 
@@ -26,7 +26,7 @@ Nguồn hợp đồng là [docs/api/catalog.md](../../docs/api/catalog.md). Bả
 | API | Dùng để làm gì | Ai gọi | Quyền |
 |---|---|---|---|
 | `GET /internal/payments/{paymentId}` | Trạng thái một giao dịch | Service khác trong network nội bộ, hoặc cổng vào khi cần | Nội bộ |
-| `GET /internal/payments/by-reservation/{reservationId}` | Giao dịch của một lượt giữ chỗ, dùng cho demo và trang "vé của tôi" | Service khác trong network nội bộ | Nội bộ |
+| `GET /internal/payments/by-reservation/{reservationId}` | Giao dịch của một lượt giữ chỗ, dùng cho demo và đối soát | Lời gọi trong network nội bộ | Nội bộ |
 | `POST /internal/payments/{paymentId}/simulate` | Bấm kết quả thành công/thất bại khi trình diễn; có chữ ký chặn bên ngoài bấm | Người vận hành demo | Nội bộ |
 | `POST /internal/payments/{paymentId}/refund` | Hoàn tiền toàn phần hoặc một phần; bản MUST chỉ dùng cho luồng tự động khi sự kiện bị hủy | Lời gọi trong network nội bộ | `payment.refund` |
 | `GET /healthz` | Cho Docker biết service đã sẵn sàng | Docker Compose | Không qua cổng vào |
@@ -39,13 +39,18 @@ Chưa làm trong 4 tuần (STRETCH): tạo giao dịch bằng lệnh gọi trự
 
 | Thông báo | Từ ai | Phần này làm gì |
 |---|---|---|
-| `ReservationCreated` | Vé & chỗ ngồi | Tạo giao dịch ở trạng thái chờ, rồi cho cổng giả lập trả kết quả |
-| `EventCancelled` | Sự kiện | Hoàn 100% mọi giao dịch thành công của sự kiện đó |
+| `ReservationCreated` | Vé & chỗ ngồi | Tạo giao dịch ở trạng thái chờ, nhớ cả `event_id` và `organization_id` từ tin, rồi cho cổng giả lập trả kết quả |
+| `EventCancelled` | Sự kiện | Hoàn 100% mọi giao dịch thành công của sự kiện đó; giao dịch còn chờ thì chuyển sang thất bại và không thu tiền nữa |
 
 ## Báo tin đi
 
 | Thông báo | Khi nào | Ai nghe trong bản MUST |
 |---|---|---|
-| `PaymentSucceeded` | Giao dịch thành công | Vé & chỗ ngồi (dù lượt giữ chỗ đã hết hạn cũng vẫn phải hoàn, vì tiền đã thật sự lấy) |
+| `PaymentSucceeded` | Giao dịch thành công **và lượt giữ chỗ còn hạn**. Hết hạn thì không phát tin này, mà phát `RefundCompleted` | Vé & chỗ ngồi |
 | `PaymentFailed` | Giao dịch thất bại | Vé & chỗ ngồi |
-| `RefundCompleted` | Đã hoàn tiền | chưa có |
+| `RefundCompleted` | Đã hoàn tiền: tự hoàn khi sự kiện bị hủy, hoặc hoàn theo lệnh ops ở endpoint nội bộ | chưa có |
+
+`ReservationCreated` mang `expires_at`, nên phần này biết hạn giữ chỗ mà không phải hỏi lại. Hai quy tắc chốt ở [docs/architecture.md §4.2](../../docs/architecture.md):
+
+- Chuẩn bị chốt thành công mà `now > expires_at` → ghi `SUCCEEDED`, tự tạo một `refunds` toàn phần, phát `RefundCompleted`, **không** phát `PaymentSucceeded`.
+- Nhận `EventCancelled` mà giao dịch còn `PENDING` → chuyển thẳng `FAILED`, **không** phát `PaymentSucceeded`. Đang hủy thì đừng thu tiền nữa.

@@ -22,7 +22,7 @@ Cổng vào **không sở hữu dữ liệu nghiệp vụ**: không tự quyết
 
 ## API phải cung cấp
 
-Nguồn hợp đồng là [docs/api/catalog.md](../../docs/api/catalog.md). Bảng này không định nghĩa API mới.
+Nguồn hợp đồng là [docs/api/catalog.md](../docs/api/catalog.md). Bảng này không định nghĩa API mới.
 
 ### Hai endpoint tự tổng hợp
 
@@ -38,16 +38,17 @@ Quy tắc dự phòng: nguồn nào lỗi thì key đó trả `null`, kèm `degr
 | Tiền tố công khai | Chuyển tới service |
 |---|---|
 | `/api/auth/...`, `/api/users/me`, `/api/organizations/...`, `/api/public/organizations/...` | Identity & Organization |
-| `/api/events` (tạo/sửa/publish/cancel), `/api/organizations/{orgId}/events`, `/api/public/events` | Event |
-| `/api/events/{id}/ticket-types`, `/api/events/{id}/availability`, `/api/events/{id}/tickets`, `/api/events/{id}/reservations`, `/api/reservations/...`, `/api/users/me/tickets`, `/api/tickets/check-in` | Registration & Ticketing |
+| `/api/events` (GET chi tiết, tạo, sửa, publish, cancel), `/api/organizations/{orgId}/events`, `/api/public/events` | Event |
+| `/api/events/{id}/ticket-types`, `/api/events/{id}/availability`, `/api/events/{id}/tickets`, `/api/events/{id}/reservations`, `/api/ticket-types/{id}`, `/api/reservations/...`, `/api/tickets/check-in`, `/api/users/me/tickets` | Registration & Ticketing |
 | `/internal/...` của Payment và Notification | **Không route.** Trong bản MUST, frontend không có màn hình nào chạm hai service này |
 
-Chỗ dễ đi sai: hai service Event và Registration cùng dùng đường dẫn bắt đầu bằng `/api/events/...`. Điểm phân biệt là đoạn con `ticket-types`, `availability`, `reservations`, `tickets` — bảng phân tuyến phải ghi rõ và cả nhóm duyệt, nếu không vé sẽ bị gửi nhầm sang service sự kiện. Cùng một kiểu: `/api/users/me` thuộc service hồ sơ, còn `/api/users/me/tickets` thuộc service vé.
+Chỗ dễ đi sai: hai service Event và Registration cùng dùng đường dẫn bắt đầu bằng `/api/events/...`. Điểm phân biệt là đoạn con `ticket-types`, `availability`, `reservations`, `tickets` — bảng trên đã chốt từng đường, và `PATCH /api/ticket-types/{id}` (số ít, không có tiền tố event) thuộc Registration. Thêm endpoint mới dưới `/api/events/...` là phải sửa bảng này trong cùng PR, nếu không vé sẽ bị gửi nhầm sang service sự kiện. Cùng một kiểu: `/api/users/me` thuộc service hồ sơ, còn `/api/users/me/tickets` thuộc service vé.
 
 Chưa làm trong 4 tuần (STRETCH): giới hạn tần suất request phân tán, cache, mạch ngắt khi một service chết.
 
 ## Việc còn treo trước khi đóng băng
 
-1. Chưa có tài liệu định nghĩa endpoint sống của chính cổng vào; quy ước hiện tại chỉ nói năm service có `GET /healthz` và **không** đi qua cổng. Cần chốt để Docker kiểm tra được cổng.
+1. Chưa có tài liệu định nghĩa endpoint sống của chính cổng vào; quy ước hiện tại chỉ nói năm service có `GET /healthz` và **không** đi qua cổng. Cần chốt để Docker kiểm tra được cổng (đề xuất cùng kiểu: `GET /healthz` không route qua chính nó).
 2. Danh sách 10 mã quyền và 4 chức danh phải được Identity và Event duyệt chung; cổng vào không liên quan tới quyết định này nhưng mọi service khác thì có.
-3. Tên thông báo, luồng tin và hàng đợi chưa có tài liệu; ai đặt sai là bốn, năm thành phần phải sửa cùng lúc.
+
+Đã chốt: tên thông báo, routing key, exchange, hàng đợi và quy tắc ack/nack nằm ở [docs/api/messaging.md](../docs/api/messaging.md). Cổng vào không tiêu message nào — nó chỉ chuyển và ghép — nhưng vẫn cần đọc tài liệu đó để biết `correlation_id` lấy từ `X-Request-Id` (mục 5).

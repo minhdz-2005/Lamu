@@ -33,7 +33,7 @@ Nguồn hợp đồng là [docs/api/catalog.md](../../docs/api/catalog.md). Bả
 | `POST /events/{eventId}/ticket-types` | Thêm loại vé và cấp chỗ ban đầu | Frontend (bàn quản trị), qua cổng vào | `event.update` trên event |
 | `GET /events/{eventId}/ticket-types` | Danh sách loại vé cho trang bán | Frontend, qua cổng vào | Công khai khi sự kiện đã công bố |
 | `GET /events/{eventId}/availability` | Chỗ còn từng loại, kèm cửa bán đang mở hay đóng | Cổng vào (ghép trang chi tiết) | Công khai |
-| `PATCH /ticket-types/{ticketTypeId}` | Đổi giá, đóng/mở loại vé, hạn bán; chỗ chỉ được tăng | Frontend, qua cổng vào | `event.update` |
+| `PATCH /ticket-types/{ticketTypeId}` | Đổi giá, đóng/mở loại vé, hạn bán; chỗ chỉ được tăng. **Bản MUST chưa có màn hình nào gọi** — muốn đổi thì tạo loại vé mới, xem [docs/ui/05 §4.3](../../docs/ui/05-organizer.md) | Chưa ai ở MUST; giữ cho STRETCH và cho ops | `event.update` |
 | `POST /events/{eventId}/reservations` | **Giữ chỗ**, và với vé miễn phí thì xuất vé ngay; bắt buộc kèm header `Idempotency-Key` để bấm lại không tạo lần hai | Frontend (trang chi tiết), qua cổng vào | Đã đăng nhập |
 | `GET /reservations/{reservationId}` | Trạng thái lượt giữ chỗ; frontend theo dõi kết quả thanh toán ở đây | Frontend, qua cổng vào | Self |
 | `POST /reservations/{reservationId}/confirm` | Chuyển chỗ đang giữ sang đã bán và xuất vé | **Chỉ nội bộ**, do luồng tin "đã trả tiền xong" gọi; không mở ra frontend | Nội bộ |

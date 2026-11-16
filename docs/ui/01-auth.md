@@ -8,7 +8,7 @@ Mục tiêu: user vào được hệ thống bằng email + password, và fronte
 
 ```text
 +------------------------------------------------+
-|  LumaSOA                          [logo, trái] |
+|  Lamu                               [logo, trái] |
 +------------------------------------------------+
 |                                                |
 |   +---------------- FORM 480px ------------+  |
@@ -22,7 +22,8 @@ Mục tiêu: user vào được hệ thống bằng email + password, và fronte
 |   |  (tab Đăng ký thêm: Tên hiển thị)        |  |
 |   |                                          |  |
 |   |  [      Tiếp tục                  ]      |  |
-|   |  (chỉ tab đăng nhập) Quên mật khẩu?      |  |
+|   |  (không có link "Quên mật khẩu?" — MUST     |
+|   |   không có endpoint reset; đừng thêm vào)   |  |
 |   +------------------------------------------+  |
 |   Ghi chú nhỏ: "Demo local — không có email    |
 |   thật, mật khẩu tối thiểu 8 ký tự."           |

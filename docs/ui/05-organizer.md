@@ -4,7 +4,7 @@
 
 Mục tiêu: đủ để tự chứng minh đường thẳng đứng demo — tạo event, mở bán, thêm loại vé, rồi đứng ở cửa check-in khách. Một trang, ba tab, không có sidebar quản trị.
 
-Không làm ở MUST (STRETCH): sửa event đã publish, đổi giờ, quản lý thành viên/role, dashboard số liệu, QR.
+Không làm ở MUST (STRETCH): sửa event đã publish, đổi giờ, quản lý thành viên/role, dashboard số liệu, QR. `PATCH /api/events/{id}` có trong catalog nhưng **không màn hình nào ở đây gọi** — đừng thêm nút "Sửa" rồi tự chế payload; xem §4.3 cho loại vé.
 
 ## 1. Guard và chọn tổ chức
 
@@ -18,7 +18,7 @@ GET /api/users/me -> memberships[]
 
 | Thành phần | Quyền cần | Nếu thiếu |
 |---|---|---|
-| Xem tab Sự kiện của tổ chức | membership bất kỳ (`event.read`) | Ẩn tab, hiện "Bạn chưa là thành viên tổ chức nào." |
+| Xem tab Sự kiện của tổ chức | `event.read` **cấp tổ chức** — ở MUST chỉ `OWNER` và `ADMIN` có (kiến trúc §3.1.1) | Ẩn tab. Không có membership nào trong org → "Bạn chưa là thành viên tổ chức nào."; có membership nhưng chỉ `SPEAKER` → "Bạn không có quyền xem lịch sự kiện của tổ chức." |
 | Tạo event | `event.create` | Nút "Tạo event" disabled + tooltip "Bạn cần quyền tạo event." Server vẫn 403 → banner đỏ |
 | Publish / cancel | `event.publish` / `event.cancel` | từng nút ẩn theo vai trò, không ẩn cả tab |
 | Thêm loại vé | `event.update` | panel loại vé disabled |
@@ -62,19 +62,19 @@ Identity là nguồn quyền duy nhất; frontend suy từ `memberships[].roles[
 ### 3.1 Danh sách
 
 ```text
-GET /api/organizations/{orgId}/events?status=&from=&to=
-200 -> [{id, title, slug, status, starts_at}] + total
+GET /api/organizations/{orgId}/events?status=&from=&to=&limit=&offset=
+200 -> {"items": [{id, title, slug, status, starts_at}], "total": n}   (shape chốt ở catalog §0 + §2)
 ```
 
 | Cột | Hiển thị |
 |---|---|
-| title | link sang `/events/{slug}` chỉ khi `status = PUBLISHED`; DRAFT/CANCELLED hiển thị text thường (API public trả 404 cho DRAFT) |
+| title | link sang `/events/{slug}` **chỉ khi** `status = PUBLISHED`. `DRAFT` hiển thị text thường (API public trả 404 cho DRAFT); `CANCELLED` cũng text thường — API vẫn trả 200 (catalog §2) nhưng trang 03 chỉ hiện banner hủy nên không có lý do dẫn khách tới đó |
 | slug | monospace, chữ nhỏ |
 | status | badge: DRAFT xám, PUBLISHED xanh, CANCELLED đỏ |
 | starts_at | `14:30 · 01/12/2026` (00 §6) |
 | hành động | `PUBLISHED` → [Bán vé] [Hủy]; `DRAFT` → [Publish] [Hủy]; `CANCELLED` → không có nút |
 
-Lọc `status` (dropdown All/DRAFT/PUBLISHED/CANCELLED) phản ánh vào `?tab=events&status=`. Sắp xếp mặc định `starts_at` tăng dần do UI sort client-side trên `total` đã lấy (API không guarantee thứ tự ở MUST).
+Lọc `status` (dropdown All/DRAFT/PUBLISHED/CANCELLED) phản ánh vào `?tab=events&status=`. Sắp xếp mặc định `starts_at` tăng dần do UI sort client-side trên `items` đã lấy (API không guarantee thứ tự ở MUST). Trang này gọi một phát `limit=100&offset=0` (mức tối đa catalog §0) và không phân trang; org có quá 100 event thì thuộc STRETCH, ghi rõ trong báo cáo demo.
 
 ### 3.2 Form tạo event (modal)
 
@@ -85,7 +85,7 @@ Lọc `status` (dropdown All/DRAFT/PUBLISHED/CANCELLED) phản ánh vào `?tab=e
 | `description` | `description` | bắt buộc, ≤ 2000, có counter | — |
 | `starts_at` | `starts_at` | `datetime-local`, không quá 2 năm sau | `ends_at > starts_at` check client |
 | `ends_at` | `ends_at` | phải sau `starts_at` | báo dưới field, không gửi request |
-| `timezone` | `timezone` | select, mặc định `Asia/Ho_Chi_Minh`; chỉ 2 lựa chọn `Asia/Ho_Chi_Minh`, `UTC` ở MUST | — |
+| `timezone` | `timezone` | **Không có field chọn timezone ở MUST.** Form không hiện ô nào, khi gửi dán `timezone: "Asia/Ho_Chi_Minh"` cố định theo 00 §6. `starts_at`/`ends_at` gửi kèm offset `+07:00` | — |
 | `venue` | `venue: {name, address}` | 2 ô text, không bắt buộc; gửi object `{}` nếu cả hai rỗng | — |
 
 ```text
@@ -130,8 +130,10 @@ Thành công → badge CANCELLED, hết sạch nút hành động của event đ
 
 ```text
 GET /api/events/{eventId}/availability
-200 -> [{ticket_type_id, name, price, currency, capacity, sold, reserved, available, sales_open}]
+200 -> [{ticket_type_id, name, price, currency, capacity, sold, reserved, available,
+         sales_open, sales_start, sales_end, status}]      (mảng thô, không có items/total — catalog §0)
 409 -> event chưa PUBLISHED -> panel hiện "Publish event trước khi mở bán." + nút tới Tab 1
+404 -> event_id không còn tồn tại (tab khác vừa đổi chọn) -> refetch danh sách Tab 1, quay về Tab 1
 ```
 
 | Cột | Nguồn | Ghi chú |
@@ -177,8 +179,8 @@ Thành công → thêm dòng vào bảng, focus lại ô `name` của form trố
 | Chọn event | chỉ event `PUBLISHED` hoặc `CANCELLED` (CANCELLED để đối chiếu, vé đều `VOIDED`) |
 | Ô mã | `input` monospace, uppercase hóa khi gõ, trim; Enter = bấm nút |
 | Nút | "Check-in" → `POST /api/tickets/check-in` body `{code}` |
-| Bảng vé | `GET /api/events/{eventId}/tickets?status=&limit=50&offset=0` → `[{ticket_id, code, ticket_type_name, status, checked_in_at}]` |
-| Bộ đếm | "Đã vào: {used} / {tổng}" tính từ `total` và `status=USED`; refresh 15 giây khi tab đang mở (00 §7) |
+| Bảng vé | `GET /api/events/{eventId}/tickets?status=&limit=50&offset=0` → `{"items": [{ticket_id, code, ticket_type_name, status, checked_in_at}], "total": n}` |
+| Bộ đếm | "Đã vào: {used} / {tổng}". `{tổng}` = `total` của `?limit=1&offset=0`; `{used}` = `total` của `?status=USED&limit=1&offset=0`. Hai request nhẹ, không đếm từ `items` đang render (trang chỉ mang 50 dòng). Refresh 15 giây khi tab đang mở (00 §7) |
 
 ### 5.1 Kết quả check-in (panel kết quả ngay dưới ô mã)
 
@@ -216,7 +218,7 @@ Sau mỗi lần 200: refetch bảng vé một lần (không chờ 15 giây), scr
 | Case | Xử lý |
 |---|---|
 | `POST /organizations` fail `SLUG_TAKEN` | báo dưới field slug của form tạo tổ chức, focus lại ô slug |
-| User có membership nhưng role `SPEAKER` (chỉ `event.read`) | Tab 1 xem được danh sách, mọi nút ghi bị ẩn; Tab 2/3 disabled kèm dòng "Bạn chỉ có quyền xem." |
+| User có membership nhưng role `SPEAKER` (chức danh cấp event, không có `event.read` cấp org) | `GET /api/organizations/{orgId}/events` trả 403 → ẩn cả ba tab, trang hiện "Bạn không có quyền xem lịch sự kiện của tổ chức." + nút "Xem vé của tôi". Đây là hành vi đúng theo bảng role §3.1.1, không phải bug. Team nào muốn cho speaker đọc lịch thì thêm `event.read` vào role SPEAKER trong migration seed của Identity — một dòng, không đổi API |
 | Publish xong nhưng `event_snapshot` phía Registration chưa cập nhật (eventual, vài giây) | Link `/events/{slug}` có thể 404 trong vài giây → 03 hiện ErrorState "thử lại"; tab 1 hiện note "Event vừa publish, trang công khai có thể chậm vài giây." |
 | Hai organizer cùng tạo slug giống nhau | kẻ thắng 200, kẻ thua `SLUG_TAKEN` → UI giữ form để sửa |
 | Thêm loại vé `price = 0` | badge "Miễn phí" trong bảng; khi khách mua, 03 §4 nhánh A confirm ngay — mô tả đúng trong tooltip của badge |
@@ -235,6 +237,6 @@ Sau mỗi lần 200: refetch bảng vé một lần (không chờ 15 giây), scr
 - [ ] Check-in lại cùng mã → đỏ "đã check-in lúc ...", bảng không nhân đôi dòng.
 - [ ] Mã sai → đỏ "Mã vé không tồn tại", form không mất focus.
 - [ ] Hủy event có khách đã mua → dialog 3 dòng, xác nhận xong badge CANCELLED, `/me/tickets` phía khách chuyển nhãn "Sự kiện đã hủy".
-- [ ] Đăng nhập bằng tài khoản SPEAKER → không bấm được nút ghi nào; nếu cố gửi request vẫn hiện banner 403 (test bằng devtools).
+- [ ] Đăng nhập bằng tài khoản SPEAKER → cả ba tab ẩn, hiện câu "không có quyền xem lịch sự kiện của tổ chức" (§7); cố gửi `POST /api/events` bằng devtools vẫn nhận 403 và banner đỏ hiện đúng.
 - [ ] Không có request nào tới `PATCH /api/events/...` hay `PATCH /api/ticket-types/...` (STRETCH, chưa mở).
 - [ ] Ghi kết quả test vào `docs/ui/reports/05-organizer.md`.

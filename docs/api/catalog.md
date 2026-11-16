@@ -13,12 +13,12 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 | JWT | HS256 với `JWT_SECRET` chung trong network local; Identity ký, Gateway verify. |
 | Error envelope | Mọi lỗi trả cùng một shape: `{"error": {"code": "SOLD_OUT", "message": "...", "request_id": "..."}}`. HTTP status mang ngữ nghĩa, `code` mang loại lỗi. |
 | Mã lỗi dùng chung | `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `IDEMPOTENCY_KEY_REQUIRED` 400, `CONFLICT` 409, `SOLD_OUT` 409, `SALES_CLOSED` 409, `TIME_LOCKED` 409, `EMAIL_TAKEN` 409, `SLUG_TAKEN` 409, `ALREADY_CHECKED_IN` 409, `TICKET_VOIDED` 409, `UPSTREAM_UNAVAILABLE` 502. UI map từng mã một câu tiếng Việt, không toast `code` thô cho user. |
-| Idempotency | Endpoint ghi dữ liệu do user gọi phải nhận header `Idempotency-Key`; gọi lại cùng key trả đúng kết quả cũ. |
+| Idempotency | Ở MUST, **chỉ** `POST /events/{eventId}/reservations` yêu cầu header `Idempotency-Key`; gọi lại cùng key trả đúng kết quả cũ. Endpoint ghi khác không nhận key: chống trùng bằng ràng buộc tự nhiên (`slug` unique → `SLUG_TAKEN` 409, `code` vé unique, `capacity` chỉ tăng) và UI chặn double-submit theo `00 §5`. Thêm key vào endpoint nào khác là đổi hợp đồng. |
 | Thời gian & ID | `TIMESTAMPTZ` xuất ra RFC3339 UTC; mọi ID là UUID string; field JSON dùng `snake_case`. |
 | Permission | Chỉ dùng 10 mã seed trong §3.1.1 kiến trúc. Service gửi mã khi check quyền, không tự thêm mã mới. |
-| Port | Gateway `8080` là cổng public duy nhất; năm service chạy `8080` trong network nội bộ; RabbitMQ `5672`/`15672`; Mailpit `1025`/`8025`; PostgreSQL không expose. Bảng đầy đủ ở §5 kiến trúc. |
+| Port | Gateway `8080` là cổng public duy nhất (cổng host duy nhất frontend biết tới). Năm service cũng chạy `8080` nhưng chỉ trong network `backend`, không publish ra host. RabbitMQ: AMQP `5672` nội bộ, management UI `15672` publish ra host. Mailpit: SMTP `1025` nội bộ, UI xem mail `8025` ra host. PostgreSQL `5432` không publish. Bảng đầy đủ ở §5 kiến trúc. |
 | Health | Mỗi service có `GET /healthz` (không qua Gateway) cho Compose healthcheck. |
-| Pagination | `?limit=` (mặc định 20, tối đa 100) và `?offset=`; response có `total`. |
+| Pagination | `?limit=` (mặc định 20, tối đa 100) và `?offset=`. Endpoint có phân trang (`GET /public/events`, `GET /organizations/{orgId}/events`, `GET /events/{eventId}/tickets`, `GET /internal/notifications`) trả object `{"items": [...], "total": n}` — không trả mảng thô. Endpoint không phân trang ở MUST trả mảng thô: `GET /events/{eventId}/ticket-types`, `GET /events/{eventId}/availability`, `GET /users/me/tickets` (xem [docs/ui/04 §2](../ui/04-my-tickets.md)). |
 
 ## 1. Identity & Organization Service (`identity_db`)
 
@@ -45,12 +45,12 @@ Phạm vi lấy từ §3.0 của [docs/architecture.md](../architecture.md): c�
 |---|---|---|---|---|---|
 | `POST /events` | Tạo event ở trạng thái `DRAFT` | `{organization_id, title, slug, description, starts_at, ends_at, timezone, venue}` → `{event_id, version}` | 400, 403, 409 slug trùng trong org | `event.create` trên organization | ghi `events`; không phát event (DRAFT chưa liên quan consumer) |
 | `GET /events/{eventId}` | Chi tiết event cho trang quản trị | → toàn bộ cột + `version` | 404, 403 | `event.read` trên event | đọc |
-| `GET /organizations/{orgId}/events?status=&from=&to=` | Lịch event của một tổ chức, có lọc | → `[{id, title, slug, status, starts_at}]` + `total` | 403 | `event.read` trên organization | đọc |
+| `GET /organizations/{orgId}/events?status=&from=&to=&limit=&offset=` | Lịch event của một tổ chức, có lọc | → `{"items": [{id, title, slug, status, starts_at}], "total": n}` | 403 | `event.read` trên organization | đọc |
 | `PATCH /events/{eventId}` | Sửa thông tin; chống ghi đè bằng `version`. Sau PUBLISHED chỉ sửa `title`/`description`/`venue` | `{If-Match version, fields...}` → `{event_id, version+1}` | 403, 404, 409 version lệch, 409 `TIME_LOCKED` khi đổi giờ mà đã có chỗ bán/giữ | `event.update` | ghi `events`; phát `EventUpdated` |
 | `POST /events/{eventId}/publish` | `DRAFT` → `PUBLISHED`, mở bán | → `{status: "PUBLISHED"}` | 403, 404, 409 trạng thái không hợp lệ | `event.publish` | ghi `events`; phát `EventPublished` |
 | `POST /events/{eventId}/cancel` | → `CANCELLED`, kèm lý do | `{reason}` → `{status: "CANCELLED"}` | 403, 404 | `event.cancel` | ghi `events`; phát `EventCancelled` |
-| `GET /public/events?q=&from=&limit=&offset=` | Trang chủ tìm event đã đăng | → `[{id, slug, title, starts_at, organization_slug}]` | 400 | Công khai | đọc |
-| `GET /public/events/{slug}` | Event công khai cho trang chi tiết | → `{title, description, starts_at, ends_at, timezone, venue, status, organization_id}` | 404 nếu chưa PUBLISHED | Công khai | đọc |
+| `GET /public/events?q=&from=&limit=&offset=` | Trang chủ tìm event **đã đăng**; ở MUST chỉ trả event `PUBLISHED` — `DRAFT` và `CANCELLED` không xuất hiện trong danh sách | → `{"items": [{id, slug, title, starts_at, organization_slug}], "total": n}` | 400 | Công khai | đọc |
+| `GET /public/events/{slug}` | Event công khai cho trang chi tiết; trả cả event `CANCELLED` để người đã mua thấy banner hủy, chỉ `DRAFT` là không tồn tại với công chúng | → `{title, description, starts_at, ends_at, timezone, venue, status, organization_id}` | 404 nếu `DRAFT` hoặc slug sai | Công khai | đọc |
 | STRETCH `GET/PUT /events/{eventId}/speakers`, `/schedule`, `/assets` | Diễn giả, lịch nhiều phiên, ảnh | | | `event.update` | |
 
 Payload `EventPublished` và `EventCancelled` gồm `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at`, `cancelled_reason` — đủ để Registration và Payment phản ứng mà không gọi lại Event. `EventUpdated` gồm `event_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` để Registration ghi đè `event_snapshot`.
@@ -68,9 +68,9 @@ Payload `EventPublished` và `EventCancelled` gồm `event_id`, `organization_id
 | `POST /reservations/{reservationId}/confirm` | `reserved` → `sold`, tạo registration + phát vé. **Nội bộ saga**, không route qua Gateway cho user | → `{registration_id, tickets[]}` | 409 đã confirm/hết hạn, 403 | Nội bộ | ghi `registrations`, `tickets`, `inventory`, `outbox`; phát `RegistrationConfirmed`, `TicketIssued` |
 | `DELETE /reservations/{reservationId}` | Hủy chủ động, hoàn lại `reserved` | → `{status: "RELEASED"}` | 404, 409 đã confirm | Self | ghi `reservations`, `inventory`, `outbox`; phát `ReservationReleased` (`CANCELLED`) |
 | `GET /users/me/tickets` | Vé của tôi + trạng thái check-in; title/slug/ngày lấy từ `event_snapshot` nên không gọi sang Event | → `[{ticket_id, code, event_id, event_title, event_slug, event_starts_at, event_status, ticket_type_name, status, checked_in_at}]` | 401 | Self | đọc `tickets`, `registrations`, `ticket_types`, `event_snapshot` |
-| `GET /events/{eventId}/tickets?status=&limit=&offset=` | Bảng vé của event cho bàn check-in: mã vé, trạng thái, thời điểm đã vào (không kèm tên người mua) | → `[{ticket_id, code, ticket_type_name, status, checked_in_at}]` + `total` | 404, 403 | `event.read` trên event | đọc `tickets`, `ticket_types` |
+| `GET /events/{eventId}/tickets?status=&limit=&offset=` | Bảng vé của event cho bàn check-in: mã vé, trạng thái, thời điểm đã vào (không kèm tên người mua) | → `{"items": [{ticket_id, code, ticket_type_name, status, checked_in_at}], "total": n}` | 404, 403 | `event.read` trên event | đọc `tickets`, `ticket_types` |
 | `POST /tickets/check-in` | Chuyển vé sang `USED`, ghi `checked_in_at`; tra vé theo **mã in trên ticket** | `{code}` → `{ticket_id, status: "USED", checked_in_at, event_id, event_title, ticket_type_name}` | 404 mã không tồn tại, 409 `ALREADY_CHECKED_IN`, 409 `TICKET_VOIDED`, 403 | `ticket.checkin` trên event sở hữu mã vé | ghi `tickets`; không phát event ở MUST |
-| consume `PaymentSucceeded` / `PaymentFailed` | Confirm hoặc release theo saga (quyết định 3) | | | Nội bộ | như `confirm` |
+| consume `PaymentSucceeded` / `PaymentFailed` | Confirm hoặc release theo saga (quyết định 3). Reservation không còn ở `HELD` (đã hết hạn hoặc đã hủy) thì **ack và bỏ qua**, không xuất vé, không đổi quota, ghi log kèm `request_id` — xem [messaging.md §9](messaging.md) | | | Nội bộ | như `confirm` |
 | consume `EventPublished` / `EventUpdated` / `EventCancelled` | Cập nhật `event_snapshot`; khi cancel thì release `reserved`, đánh dấu vé `VOIDED` và phát `BookingCancelled` cho từng registration | | | Nội bộ | ghi `event_snapshot`, `reservations`, `registrations`, `tickets`, `outbox` |
 | Worker (không phải API) | Quét `HELD` quá `expires_at` bằng `FOR UPDATE SKIP LOCKED`, giải phóng `reserved` đúng một lần | | | Nội bộ | phát `ReservationReleased` (`reason: EXPIRED`) |
 
@@ -79,6 +79,7 @@ Ghi chú schema và field, vì UI đọc trực tiếp các giá trị này:
 - `payment_status` trong `GET /reservations/{id}` lấy từ cột `payment_status` do chính Registration cập nhật khi tiêu `PaymentSucceeded`/`PaymentFailed` — Registration **không** gọi REST sang Payment.
 - `tickets.status` chỉ nhận `ISSUED` (vé còn hiệu lực) / `USED` (đã check-in) / `VOIDED` (event bị hủy). `ticket_types.status` chỉ nhận `ACTIVE` / `CLOSED`. Giá trị khác là lỗi seed, UI hiển thị nguyên văn và report.
 - `reservations.status` chỉ nhận `HELD` / `CONFIRMED` / `RELEASED` (xem §3.3 kiến trúc).
+- `tickets.code` do **Registration** sinh, không phải frontend hay Event: định dạng `LUMA-` + 4 ký tự hex hoa + `-` + 4 ký tự hex hoa, ví dụ `LUMA-7F3A-91C4` (tổng 17 ký tự). Ký tự lấy từ `[0-9A-F]`, sinh ngẫu nhiên, xử lý va chạm `UNIQUE` bằng cách sinh lại rồi retry trong cùng transaction — không bao giờ trả `500` vì duplicate key. UI hiển thị nguyên văn, không thêm/bớt dấu gạch, không dịch. `POST /tickets/check-in` so khớp **không phân biệt hoa thường** và có trim khoảng trắng hai đầu, vì bàn check-in gõ tay.
 - `venue` là JSONB nhưng **key cố định** `{name, address}`, mỗi key string rỗng được phép, không thêm key mới ở MUST.
 - `409 ALREADY_CHECKED_IN` phải trả `message` tiếng Việt chứa timestamp RFC3339 của lần check-in trước, ví dụ "Mã vé đã được check-in lúc 2026-12-01T11:04:00Z." — UI in nguyên văn `message`, không tra lại bảng vé để suy ra.
 - Payload event nào nuôi các field trên nằm ở [shared/contracts/events/README.md](../../shared/contracts/events/README.md).
@@ -87,20 +88,29 @@ Ghi chú schema và field, vì UI đọc trực tiếp các giá trị này:
 
 | API | Làm gì | Vào → Ra | Lỗi | Quyền | Event / bảng ghi |
 |---|---|---|---|---|---|
-| consume `ReservationCreated` | Tạo giao dịch `PENDING`, idempotent theo `reservation_id` của message (một reservation một giao dịch) | | trùng message → bỏ qua | Nội bộ | ghi `payments` (kèm `event_id`), `outbox` |
+| consume `ReservationCreated` | Tạo giao dịch `PENDING`, idempotent theo `reservation_id` của message (một reservation một giao dịch) | | trùng message → bỏ qua | Nội bộ | ghi `payments` (kèm `event_id`, `organization_id`), `outbox` |
 | `GET /internal/payments/{paymentId}` | Trạng thái giao dịch | → `{status, amount, currency, provider_reference}` | 404 | Nội bộ | đọc |
-| `GET /internal/payments/by-reservation/{reservationId}` | Payment của một reservation, cho trang "vé của tôi" và demo | → `{payment_id, status}` | 404 | Nội bộ | đọc |
+| `GET /internal/payments/by-reservation/{reservationId}` | Payment của một reservation | → `{payment_id, status}` | 404 | Nội bộ | đọc |
 | `POST /internal/payments/{paymentId}/simulate` | Bấm nút trình bày SUCCESS/FAILURE trong demo; mode `mock` tự SUCCESS sau `PAYMENT_MOCK_DELAY_SECONDS` | `{outcome: "SUCCESS" hoặc "FAILURE"}` + HMAC mock | 401 chữ ký sai, 409 đã chốt trạng thái | Nội bộ | ghi `payments`, `outbox`; phát `PaymentSucceeded`/`PaymentFailed` |
 | `POST /internal/payments/{paymentId}/refund` | Hoàn tiền toàn phần hoặc một phần | `{amount?}` → `{refund_id, status}` | 404, 409 quá số tiền/chưa thành công | `payment.refund` | ghi `refunds`, `outbox`; phát `RefundCompleted` |
 | consume `EventCancelled` | Refund 100% mọi giao dịch SUCCESS có cùng `event_id` (quyết định 7) | | idempotent theo message_id | Nội bộ | ghi `refunds`, `outbox`; phát `RefundCompleted` |
 | STRETCH `POST /internal/payments` | Tạo giao dịch bằng REST cho kịch bản tạo lại thủ công | | | Nội bộ | |
+
+Ghi chú cho cả mục 4:
+
+- **Không màn hình nào của frontend gọi endpoint Payment.** Bốn đường `/internal/...` ở trên dùng cho demo và đối soát qua mạng nội bộ (`docker compose exec`, curl trong network `backend`), không route qua Gateway cho user. Trang 03 biết kết quả thanh toán nhờ `payment_status` trên reservation, trang 04 biết hoàn tiền nhờ trạng thái event — xem [docs/ui/03 §4](../ui/03-event-detail-and-booking.md).
+- Đường hoàn tiền **duy nhất trong MUST** là branch `consume EventCancelled`: tự động, toàn phần 100%, không có người bấm, không cần permission.
+- `POST /internal/payments/{id}/refund` vẫn có cho ops/demo. Nó nhận `X-User-Id` do Gateway hoặc người vận hành truyền và check `payment.refund` trên organization sở hữu event của giao dịch. Payment không gọi REST sang Event, nên **`ReservationCreated` payload phải mang `organization_id`** để Payment ghi được cột đó lúc tạo giao dịch (`EventCancelled` đã có sẵn `organization_id`). `amount` bỏ trống = hoàn toàn phần; hoàn một phần là khả năng của API, **không** có UI ở MUST.
+- `payments.status`: `PENDING` → `SUCCEEDED` \| `FAILED`; đã chốt `SUCCEEDED`/`FAILED` thì không đổi được nữa (`409`), chỉ `refund` mới tạo bản ghi `refunds` mới.
+- `refunds.status`: `SUCCEEDED` \| `FAILED` (mock luôn `SUCCEEDED`). `RefundCompleted` payload mang `payment_id`, `reservation_id`, `event_id`, `amount`, `currency`, `organization_id`.
+- `payment.refund` là 1 trong 10 mã seed; `OWNER` và `ADMIN` đều có (ADMIN chỉ mất `org.member.manage` — §3.1.1 kiến trúc). Ở MUST không có màn hình nào gọi, nên đường này chỉ phục vụ kiểm thử thủ công.
 
 ## 5. Notification Service (`notification_db`)
 
 | API | Làm gì | Vào → Ra | Lỗi | Quyền | Event / bảng ghi |
 |---|---|---|---|---|---|
 | consume `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased`, `BookingCancelled` | Tạo job email; `recipient_email` và `template_key` lấy thẳng từ payload | | | Nội bộ | ghi `notification_jobs`, `processed_messages` |
-| `GET /internal/notifications?status=&limit=` | Bảng job để chứng minh luồng bất đồng bộ trong demo và báo cáo | → `[{id, event_type, recipient_email, status, attempts}]` | 400 | Nội bộ | đọc |
+| `GET /internal/notifications?status=&limit=&offset=` | Bảng job để chứng minh luồng bất đồng bộ trong demo và báo cáo | → `{"items": [{id, event_type, template_key, recipient_email, status, attempts, created_at}], "total": n}` | 400 | Nội bộ | đọc |
 | STRETCH `GET /users/me/notifications` | Trung tâm thông báo trong ứng dụng; cần thêm cột `read_at TIMESTAMPTZ NULL` vào `notification_jobs` | → `[{id, template_key, payload, created_at, read_at}]` | 401 | Self | đọc `notification_jobs` |
 | Worker (không phải API) | Gửi qua Mailpit hoặc log, retry có backoff, message hỏng đẩy sang DLQ | | | Nội bộ | ghi `notification_jobs.status`/`attempts` |
 
@@ -162,4 +172,4 @@ Tám quyết định tại §1.1 của [docs/architecture.md](../architecture.md
 Còn đúng hai việc cần cả nhóm duyệt trước khi freeze, vì chúng đổi cả schema lẫn routing:
 
 1. Danh sách 10 permission code và 4 role seed ở §3.1.1 — Identity và Event phải dùng chung một danh sách.
-2. Tên event, routing key và queue trong `docs/api/messaging.md` (sẽ viết từ cột "Event / bảng ghi" của tài liệu này) — đặt sai tên lúc đó phải sửa cả producer lẫn consumer.
+2. Tên event, routing key, queue và DLQ trong [docs/api/messaging.md](messaging.md) — tài liệu đã viết xong từ cột "Event / bảng ghi" của mục 3–5, nhưng chưa approve; đặt sai tên lúc đó phải sửa cả producer lẫn consumer. messaging.md §13 còn ghi thêm hai điểm mở (quy tắc DLQ, và khoảng tiền-hụt-chưa-tự-hoàn).

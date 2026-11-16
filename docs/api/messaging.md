@@ -104,8 +104,8 @@ Envelope: 8 field đã chốt ở [shared/contracts/events/README.md](../../shar
 
 ## 6. Bên phát: chỉ phát sau khi ghi được dữ liệu
 
-1. Handler nghiệp vụ ghi bảng của mình **và** một row outbox trong cùng một transaction. Chưa publish gì trong transaction.
-2. Worker outbox đọc row chưa phát theo thứ tự `id`, publish với `confirm_select` bật, chỉ khi broker xác nhận mới đánh dấu đã phát.
+1. Handler nghiệp vụ ghi bảng của mình **và** một row `outbox_events` trong cùng một transaction. Chưa publish gì trong transaction.
+2. Worker outbox đọc row chưa phát theo thứ tự `id` tăng dần, publish ở chế độ publisher confirm, chỉ khi broker xác nhận mới điền `published_at`.
 3. Row chưa phát thì để nguyên; lần quét sau phát lại với **cùng** `event_id`. Vì vậy "phát hai lần" là bình thường, và đó chính xác là lý do mục 7 tồn tại.
 
 Không service nào được nhân danh service khác để phát event, và không được phát event mà không ghi row outbox.
@@ -115,7 +115,7 @@ Không service nào được nhân danh service khác để phát event, và kh�
 1. Trước khi ack: kiểm `message_id` đã nằm trong bảng đã xử lý chưa. Rồi mới chạy handler.
 2. Toàn bộ việc của handler — thay đổi dữ liệu của mình **và** ghi dấu đã xử lý — nằm trong một transaction. ack sau khi commit.
 3. Handler thất bại: không ack, không tự đưa message về đầu hàng đợi. Làm theo mục 8 — thử lại trong tiến trình có nghỉ, hết ba lần thì nack sang DLQ.
-4. Bảng chống trùng: `processed_messages(message_id UUID PK, processed_at)` đã có trong `payment_db` và `notification_db`. `registration_db` chưa có — xem mục 13.
+4. Bảng chống trùng `processed_messages(message_id UUID PK, processed_at)` có trong **ba** DB của ba service tiêu message: `registration_db`, `payment_db`, `notification_db` (§3.3, §3.4, §3.6 kiến trúc). Identity và Event không có bảng này vì không tiêu message nào ở MUST.
 
 **Không bao giờ** ack trước khi ghi, và **không bao giờ** giữ khóa database khi đang chờ broker.
 
@@ -130,8 +130,9 @@ Không service nào được nhân danh service khác để phát event, và kh�
 
 | Tình huống | Kết quả đúng |
 |---|---|
-| `reservation.released.v1` (hết hạn) tới Notification trước `payment.succeeded.v1` tới Registration | Email "hết hạn giữ chỗ" có thể tới trước. Registration gặp `payment.succeeded.v1` trên reservation đã nhả: **không xuất vé**, và Payment hoàn tiền cho giao dịch đã thành công. Đã chốt ở §4.3 kiến trúc |
-| Hai message `payment.succeeded.v1` khác `event_id` cho cùng một `reservation_id` | Chống trùng theo `message_id` không chặn được. Registration phải chặn bằng trạng thái reservation: đã `CONFIRMED` thì trả 409 và bỏ qua message |
+| Giữ chỗ hết hạn, `reservation.released.v1` tới Notification trong khi Payment chưa chốt kết quả | Email "hết hạn giữ chỗ" có thể tới trước, và đó là email đúng. Payment lúc chốt thấy `now > expires_at` (field có trong `ReservationCreated`) thì **không** phát `payment.succeeded.v1`, tự hoàn tiền và phát `refund.completed.v1`. Registration không bao giờ nhận lệnh confirm cho chỗ đã nhả |
+| `payment.succeeded.v1` vẫn tới cho một reservation không còn ở `HELD` (user bấm Hủy giữ chỗ, hoặc event bị hủy ngay trước khi mock chốt) | Registration **ack và bỏ qua**: không xuất vé, không đổi `sold`/`reserved`, ghi log kèm `request_id`. Chống trùng theo `message_id` không chặn được trường hợp này, phải chặn bằng trạng thái reservation. Tiền chưa tự hoàn — xem mục 13.4 |
+| Hai message `payment.succeeded.v1` khác `event_id` cho cùng một `reservation_id` | Cùng cách xử lý: reservation đã `CONFIRMED` thì message thứ hai bị bỏ qua (không 409 cho consumer, chỉ ghi log), không có vé thứ hai |
 
 ## 10. Bốn event chưa có queue trong bản MUST — vẫn phải phát
 
@@ -159,11 +160,12 @@ Bằng chứng topology đã chạy đúng cho demo: mua vé có phí → `payme
 
 ## 13. Việc phải duyệt trước khi đóng băng
 
-Ngoài hai việc catalog §8 đã nêu (danh sách 10 mã quyền, và tên/queue/routing key của tài liệu này), ba điểm sau phát hiện khi viết tài liệu:
+Hai việc catalog §8 đã nêu (danh sách 10 mã quyền + 4 role, và chính tên/queue/routing key của tài liệu này) vẫn còn mở. Ba điểm phát hiện khi viết tài liệu đã xử lý hai, còn một:
 
-1. **`registration_db` thiếu hai bảng mà các luồng đã ghi đều cần.** §3.3 kiến trúc liệt kê 7 bảng, không có `outbox_events` và `processed_messages`; nhưng §4.2 và catalog §3 đều yêu cầu "ghi outbox", và Registration là consumer của 5 event nên bắt buộc phải chống trùng. Cần approve thêm hai bảng này vào `registration_db`, nếu không mục 6 và 7 không thực hiện được.
-2. **Cổng 5672 của RabbitMQ.** §5 kiến trúc ghi "RabbitMQ | 5672, 15672" ở cột cổng trên host, còn `docker-compose.yml` hiện chỉ publish 15672. Năm service nằm trong network `backend` nên không cần 5672 lộ ra host; cần chọn một: sửa §5 hoặc thêm publish vào compose.
-3. **Đường dẫn message hỏng.** `luma.dead` là direct exchange, còn `x-dead-letter-routing-key` đặt bằng đúng tên queue — đây là cách làm chuẩn của RabbitMQ nhưng cần cả nhóm xác nhận, để không ai tự đổi sang `x-dead-letter-exchange` trỏ thẳng về topic exchange nghiệp vụ và làm message quay vòng lại handler vừa hỏng.
+1. ~~`registration_db` thiếu `outbox_events` và `processed_messages`.~~ **Đã đóng.** §3.3 kiến trúc nay liệt kê đủ hai bảng, và §3.6 chốt bảng nào thuộc service nào (Identity/Event chỉ có outbox; Registration/Payment/Notification có `processed_messages`; Notification không có outbox vì không phát tin).
+2. ~~Cổng 5672 của RabbitMQ lộ ra host hay không.~~ **Đã đóng theo hướng không lộ.** §5 kiến trúc tách thành hai cột "publish ra host" và "chỉ trong network `backend`"; compose hiện tại chỉ publish 15672 là đúng hợp đồng. Hệ quả phải nhớ: cấu hình dev của service trỏ `rabbitmq:5672`, không phải `localhost:5672`.
+3. **Đường dẫn message hỏng chưa ai xác nhận.** `luma.dead` là direct exchange, còn `x-dead-letter-routing-key` đặt bằng đúng tên queue — đây là cách làm chuẩn của RabbitMQ nhưng cần cả nhóm gật đầu, để không ai tự đổi sang `x-dead-letter-exchange` trỏ thẳng về topic exchange nghiệp vụ và làm message quay vòng lại handler vừa hỏng.
+4. **Khoảng tiền-thua-hụt chưa có cơ chế tự động.** Reservation bị giải phóng *trước* `expires_at` (user bấm Hủy giữ chỗ, hoặc event bị hủy) khi `PaymentSucceeded` đã phát: Registration ack và bỏ qua, tiền nằm lại, chỉ có ops hoàn bằng `POST /internal/payments/{id}/refund`. Muốn tự động thì cần thêm queue `payment.refund` bind vào `reservation.released.v1` — đổi topology nên phải duyệt trước freeze, không tự làm trong code. Chi tiết và lý do chọn chưa làm: §4.2 kiến trúc.
 
 ## 14. Chưa làm trong 4 tuần (STRETCH)
 
