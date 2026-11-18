@@ -1,5 +1,7 @@
 # 01. Đăng ký và đăng nhập
 
+Cập nhật triển khai 16/11/2026: ba luồng login/register/recovery đã nối Identity qua same-origin `/api/identity` khi build `NEXT_PUBLIC_AUTH_MODE=real`; canonical v1.4.1. Recovery là mode trong `/auth`, reset proof chỉ ở memory. Default `/me`, Account vẫn preview ngoài nghiệm thu. Các mô tả M4/NOT RUN bên dưới là lịch sử thiết kế; xem [báo cáo hiện tại](../../services/identity-service/report/REPORT_FRONTEND_AUTH_INTEGRATION_01.md) cho evidence thật và giới hạn.
+
 **Route:** `/auth` · **Cần đăng nhập:** Không · **Ưu tiên:** 1 · **API:** `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/users/me`
 
 Mục tiêu: user vào được hệ thống bằng email + password, và frontend giữ được phiên khi access token hết hạn. Một trang, hai tab, không route phụ.
@@ -73,7 +75,7 @@ Lỗi:
 | Tài khoản bị khóa | `403 FORBIDDEN` | Banner "Tài khoản bị khóa. Liên hệ ban tổ chức demo." |
 | Thiếu/sai field | `400 VALIDATION_FAILED` | Error canonical không có field_errors; chỉ map field khi UI biết chắc nguyên nhân, còn lại banner chung; không parse câu tiếng Anh để đoán field |
 | Quá nhiều request | `429 RATE_LIMITED` | thông báo chờ; không auto-login/refresh/retry liên tục |
-| Network/upstream/timeout | network/502/504 | banner kết nối + request_id nếu có; không báo sai password hoặc xóa phiên khác từ suy đoán |
+| Network/upstream/timeout | network/502/504 | banner giải thích lỗi kết nối hoặc hết thời gian chờ; giữ trạng thái phiên đã xác minh |
 
 ### 3.2 Đăng ký
 
@@ -107,7 +109,7 @@ Không có chức năng Quên mật khẩu, đổi mật khẩu, xác minh email
 | Form rỗng | lần đầu vào `/auth` | form chưa validate, nút "Tiếp tục" enabled nhưng submit sẽ chặn nếu thiếu |
 | Submitting | đang gọi API | nút `disabled` + "Đang kiểm tra...", input `readonly`, không cho đổi tab |
 | Field error | sau submit fail có `fieldErrors` | lỗi đỏ dưới field, `aria-describedby`, focus field đầu tiên |
-| Api error | 401/403/409/5xx | banner trên đầu form theo 00 §3, kèm `request_id` chữ nhỏ |
+| Api error | 401/403/409/5xx | banner tiếng Việt trên đầu form theo 00 §3 |
 | Redirecting | 200 login | form mờ, nút "Đang mở..." tối đa 500 ms rồi chuyển route |
 | Session checking | có credential/cache nhưng chưa xác minh | skeleton/checking hữu hạn; lỗi mạng có trạng thái lỗi riêng, không suy authenticated từ token tồn tại |
 | Logging out | đang điều phối refresh/logout | disable hành động session mới, thông báo kết quả thu hồi đúng mức xác nhận |

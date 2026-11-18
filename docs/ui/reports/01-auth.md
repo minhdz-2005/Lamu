@@ -1,5 +1,7 @@
 # Báo cáo test tay — 01 Đăng nhập & đăng ký
 
+Evidence ngày 16/11/2026 được ghi riêng tại [REPORT_FRONTEND_AUTH_INTEGRATION_01](../../../services/identity-service/report/REPORT_FRONTEND_AUTH_INTEGRATION_01.md): Chromium, Gateway/Identity/PostgreSQL/Mailpit thật. Bảng bên dưới giữ nguyên lịch sử mock, không đại diện cho hành vi/route/session record hiện tại.
+
 Test trên `npm run dev` + mock gateway (`src/app/api/[...path]/route.ts`), Chrome ngày 02/11/2026. Tài khoản seed: `demo@luma.dev`, `khach@luma.dev`, `speaker@luma.dev` (mật khẩu `password123`).
 
 | Checklist mục | Kết quả | Ghi chú |

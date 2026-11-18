@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Post,
   Query,
@@ -26,6 +27,21 @@ export class InvitationsController {
     const page = pagination(query);
     return this.invitations.list(
       req.identity.sub.toLowerCase(),
+      page.limit,
+      page.offset,
+    );
+  }
+  @Get("organizations/:orgId/members/invitations")
+  @Header("Cache-Control", "no-store")
+  listSent(
+    @Req() req: IdentityRequest,
+    @Param("orgId") org: string,
+    @Query() query: Record<string, unknown>,
+  ) {
+    const page = pagination(query);
+    return this.invitations.listSent(
+      req.identity.sub.toLowerCase(),
+      uuid(org),
       page.limit,
       page.offset,
     );

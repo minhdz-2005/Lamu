@@ -15,7 +15,7 @@ const DOUBLE_SUBMIT_MS = 800;
 type Result =
   | { kind: "ok"; message: string; note?: string }
   | { kind: "warn"; message: string }
-  | { kind: "error"; message: string; requestId?: string };
+  | { kind: "error"; message: string };
 
 interface Props {
   events: OrganizerEvent[];
@@ -32,7 +32,7 @@ export function CheckInTab({ events, eventId, onEventChange }: Props) {
   const [total, setTotal] = useState(0);
   const [used, setUsed] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string } | null>(null);
   const [forbidden, setForbidden] = useState(false);
 
   const [code, setCode] = useState("");
@@ -140,14 +140,13 @@ export function CheckInTab({ events, eventId, onEventChange }: Props) {
       } else if (err instanceof ApiException && err.code === "NOT_FOUND") {
         setResult({
           kind: "error",
-          message: "Mã vé không tồn tại. Kiểm tra lại phím tắt Tiếng Việt.",
-          requestId: described.requestId,
+          message: "Không tìm thấy vé. Hãy kiểm tra lại mã vé.",
         });
       } else if (err instanceof ApiException && err.code === "FORBIDDEN") {
         setForbidden(true);
-        setResult({ kind: "error", message: described.message, requestId: described.requestId });
+        setResult({ kind: "error", message: described.message });
       } else {
-        setResult({ kind: "error", message: described.message, requestId: described.requestId });
+        setResult({ kind: "error", message: described.message });
       }
       tone(false);
     } finally {
@@ -236,13 +235,12 @@ export function CheckInTab({ events, eventId, onEventChange }: Props) {
               >
                 {result.message}
                 {result.kind === "ok" && result.note && <div className="small">{result.note}</div>}
-                {result.kind === "error" && result.requestId && <span className="request-id mono">{result.requestId}</span>}
               </div>
             )}
           </div>
 
           {error && (
-            <Banner kind="error" requestId={error.requestId}>
+            <Banner kind="error">
               {error.message}{" "}
               <Button size="sm" onClick={() => void load()}>
                 Thử lại

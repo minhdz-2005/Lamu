@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 interface AccountIconProps {
-  readonly name: "reload" | "logout" | "external" | "chevron" | "arrow" | "plus" | "people" | "notice" | "lock" | "clock";
+  readonly name: "reload" | "logout" | "external" | "chevron" | "arrow" | "plus" | "people" | "notice" | "lock" | "clock" | "camera";
   readonly size?: number;
   readonly className?: string;
 }
@@ -17,6 +17,7 @@ const paths: Readonly<Record<AccountIconProps["name"], ReactNode>> = {
   notice: <><circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" /></>,
   lock: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
   clock: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
+  camera: <><path d="M3 7h4l2-3h6l2 3h4a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z" /><circle cx="12" cy="13" r="3" /></>,
 };
 
 export function AccountIcon({ name, size = 16, className }: AccountIconProps) {

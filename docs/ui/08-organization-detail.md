@@ -2,7 +2,7 @@
 
 **Route:** `/organizations/[orgId]` · **Cần đăng nhập:** Bắt buộc, quyền do Identity kiểm tra · **Ưu tiên:** M4 Identity — 4 · **API:** `GET /api/organizations/{orgId}`, `GET /api/organizations/{orgId}/members`, `PUT /api/organizations/{orgId}/members/{userId}/roles`, `POST /api/organizations/{orgId}/members/invitations`, `POST /api/organizations/{orgId}/members/invitations/{id}/revoke`, `GET /api/users/me`
 
-Mục tiêu: quản lý thành viên/role ORG và mời user đã có tài khoản, độc lập Event. **Trạng thái: thiết kế M4, chưa triển khai/chưa nghiệm thu.** Authority: [Identity OpenAPI v1.2.0](../../shared/contracts/http/identity.openapi.json), schemas `Organization`, `OrganizationMembers`, `ReplaceMemberRoles`, `RoleAssignment`, `CreateInvitation`, `InvitationCreated`, `InvitationRevoked`; [00](00-conventions.md), [D09 còn DRAFT](../integration/identity-handoff.md#d09-draft).
+Mục tiêu: quản lý thành viên/role ORG và mời user đã có tài khoản, độc lập Event. **Trạng thái: đã nối Identity API ở local.** Authority: [Identity OpenAPI v1.5.0](../../shared/contracts/http/identity.openapi.json), schemas `Organization`, `OrganizationMembers`, `ReplaceMemberRoles`, `RoleAssignment`, `CreateInvitation`, `InvitationCreated`, `InvitationRevoked`, `OrganizationInvitations`; [00](00-conventions.md), [D09 còn DRAFT](../integration/identity-handoff.md#d09-draft).
 
 ## 1. Layout
 
@@ -85,7 +85,7 @@ Một thành viên có thể có nhiều assignment. UI đọc/hiển thị đ�
 2. POST create với key/access → **201 InvitationCreated**; lưu receipt chỉ trong memory của actor/org/page hiện tại, gồm ID/status/expires_at từ server.
 3. Hiện “Đã tạo lời mời trong ứng dụng” và hướng dẫn người nhận đăng nhập vào inbox; không nói email đã gửi. Chưa append member vì người nhận chưa accept.
 4. Receipt có nút Thu hồi khi còn có thể thực hiện: xác nhận rồi POST revoke body rỗng với **key mới cho operation revoke** →200 InvitationRevoked. Quyền OWNER hiện tại/expiry/terminal state do server kiểm.
-5. Receipt mất khi reload/chuyển org/đổi user. **Chưa có GET lời mời theo org**, nên không thiết kế tab “Lời mời đã gửi” có dữ liệu bền vững, không lưu email nhạy cảm vào localStorage để giả backend. Revoke lời mời cũ qua UI đầy đủ là dependency API bổ sung cần review riêng.
+5. Receipt mất khi reload/chuyển org/đổi user. OWNER mở tab “Lời mời đã gửi” để tải `GET /api/organizations/{orgId}/members/invitations?limit=20&offset=0` và thu hồi lời mời PENDING sau reload. Danh sách phân trang từ server, hiển thị tên/email hiện tại của người nhận, quyền snapshot, trạng thái và mốc thời gian. Server trả EXPIRED theo hiệu lực khi đọc. Tab bỏ dữ liệu nhạy cảm nếu mất quyền. Email chỉ hiện trong UI quản lý của OWNER, giữ trong bộ nhớ.
 
 | Tình huống | API | UI |
 |---|---|---|
@@ -134,4 +134,5 @@ Một thành viên có thể có nhiều assignment. UI đọc/hiển thị đ�
 - [ ] Không có GET invitation theo org, API search user, deactivate/delete member hoặc picker Event giả.
 - [ ] Retry giữ đúng key/target/body; response cũ không cập nhật user/org khác.
 - [ ] Dialog keyboard/mobile/theme và các lỗi400/401/403/404/409/429/502/504 được kiểm.
-- [ ] Khi chạy thật tạo `docs/ui/reports/08-organization-detail.md`; browser integration hiện **NOT RUN**, outgoing invitation list và EVENT adapter chưa triển khai.
+
+Kết quả kiểm chứng theo từng route ở [báo cáo UI local](reports/identity-pages-integration-02.md).

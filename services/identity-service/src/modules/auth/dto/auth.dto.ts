@@ -16,3 +16,7 @@ export class RegisterDto extends LoginDto {
 export class RefreshDto {
   @IsString() @Matches(/^[A-Za-z0-9_-]{43}$/) refresh_token!: string;
 }
+export class ChangePasswordDto {
+  @IsString() @Length(8, 128) current_password!: string;
+  @IsString() @Length(8, 128) new_password!: string;
+}

@@ -11,14 +11,14 @@
 | Cấm | Không gọi thẳng cổng service (8081…8085), không gọi endpoint `/internal/...`, không tự suy đoán field chưa có trong catalog. |
 | Response envelope | Success: JSON thô như catalog. Error: `{"error": {"code", "message", "request_id"}}`. |
 | Field | `snake_case` như API, không đổi tên khi đưa vào UI. |
-| Authority Identity | [OpenAPI v1.2.0](../../shared/contracts/http/identity.openapi.json); [Gateway projection](../../shared/contracts/http/gateway.openapi.json), [generated types](../../shared/contracts/http/generated/identity.d.ts) derive cùng nguồn. Mocks/fixtures M4 phải validate cùng artifact, không copy interface handwritten làm authority thứ hai. |
+| Authority Identity | [OpenAPI v1.5.0](../../shared/contracts/http/identity.openapi.json); [Gateway projection](../../shared/contracts/http/gateway.openapi.json), [generated types](../../shared/contracts/http/generated/identity.d.ts) derive cùng nguồn. Mocks/fixtures M4 phải validate cùng artifact, không copy interface handwritten làm authority thứ hai. |
 | Correlation | `X-Request-Id` UUID; Gateway giữ một UUID hợp lệ hoặc sinh mới. Không dùng `req-*` làm claim/UUID giả; request ID không là bằng chứng danh tính. |
 
 ## 2. Phiên đăng nhập (token)
 
 | Mục | Chốt |
 |---|---|
-| Lưu | Mock hiện dùng localStorage `luma.access`, `luma.refresh`, `luma.profile`; đây là hiện trạng, không tự chốt storage browser M4. Cần xác nhận local-demo storage hay cookie/BFF/CSRF trước implementation§14. Theme `luma.theme` độc lập session. Không in token/password vào log/report/URL. |
+| Lưu | Phiên v2 lưu cặp token và cache Profile trong localStorage theo namespace real/mock. Web Locks phối hợp refresh/logout giữa các tab. Cần xác minh Profile trước khi hiển thị email hoặc quyền. Theme `luma.theme` độc lập session. |
 | Gửi | Access Bearer cho route protected, kể cả logout. Register/login/refresh public không gửi context `X-User-Id`/`X-Session-Id` tự khai; Gateway tự cấp từ JWT verified. |
 | Hạn phiên | Access900s; refresh7 ngày tuyệt đối kể từ login. Rotation thay cả token pair, giữ sid/hạn; refresh cũ401. Không giả refresh là sliding7 ngày hoặc logout thu hồi access ngay. |
 | Hết hạn | Request protected không thuộc `/auth/*`401 → refresh tối đa một lần rồi retry request cũ tối đa một lần. Giữ nguyên mutation body/key. Refresh401 mới kết luận credential không dùng được;403 account unavailable xử lý riêng; network/5xx/timeout là lỗi kết nối/kết quả chưa rõ, không giả401. Route công khai không bị đá khỏi trang đọc chỉ vì session không dùng được. |
@@ -29,7 +29,7 @@
 
 ## 3. Map mã lỗi → thông báo tiếng Việt
 
-Hiện `message` từ API nếu nó là câu tiếng Việt; nếu API chỉ trả code, dùng bảng cố định sau. Luôn kèm `request_id` trong toast (chữ nhỏ, để demo khi lỗi báo cáo lại được).
+Hiển thị câu tiếng Việt theo ngữ cảnh thao tác và mã lỗi đã biết. Với lỗi chưa nhận diện, dùng thông báo chung và hướng dẫn thử lại khi phù hợp. `request_id` phục vụ đối chiếu kỹ thuật qua HTTP và log.
 
 | `error.code` | Status | Câu hiển thị | Hành động UI |
 |---|---|---|---|
@@ -184,12 +184,12 @@ Toàn bộ giao diện đọc màu/chữ/khoảng cách từ token trong `fronte
 
 ## 14. Phạm vi M4 Gateway/Identity và quyết định còn mở
 
-01 +06–09 mô tả thiết kế có thể làm với backend Identity1.2.0; không tự đổi phạm vi MUST/STRETCH của dự án toàn hệ thống. Thứ tự triển khai: client/session/logout →01 →06 →07 →08 →09. Đây là **tài liệu thiết kế**, frontend code vẫn chưa thay, các checklist browser/backend thật NOT RUN.
+01 và 06–09 dùng HTTP Identity 1.5.0 qua Next same-origin trong real mode. Trạng thái nghiệm thu ở [báo cáo UI local](reports/identity-pages-integration-02.md).
 
 | Dependency/decision | Đề xuất hoặc giới hạn | Trước khi làm phần phụ thuộc |
 |---|---|---|
 | Transport | Ưu tiên same-origin proxy cho đường Identity có allowlist; full Gateway URL cần CORS origin cụ thể. Không fallback silent sang mock nếu Gateway lỗi. | Chốt routing/ownership Next `/api` vs Gateway để không gặp lại catch-all mock; không expose internal |
-| Storage/session | Hiện localStorage; cần chốt chấp nhận cho local demo hoặc thiết kế cookie/BFF/CSRF riêng; không coi backend JSON token đã giải quyết browser storage | Chốt policy trước code coordinator/session và nghiệm thu browser; không tự đổi backend contract |
+| Storage/session | Local dùng session v2 theo mode, Web Locks và Next same-origin theo auth report | Browser thật kiểm session và phối hợp liên tab |
 | Nhiều tab | Đề xuất cùng-origin đồng bộ logout/generation qua BroadcastChannel/storage và serialize refresh liên tab; chưa quyết định cơ chế khóa/timeout/khôi phục | Chốt logout tác động các tab chia sẻ phiên thế nào, test tab đóng/race/mất message; không tương đương server logout-all |
 | Deadline coordinator | Cần timeout hữu hạn cho bootstrap/chờ refresh/logout; Gateway hiện upstream3000ms, không đồng nghĩa browser phải tự suy timeout là logout thành công | Chốt deadline/retry budget ở bước session implementation, ghi test; chưa tự gán mọi lỗi timeout thành401 |
 | EVENT role | Đọc snapshot có thể hiển thị; mutation EVENT phụ thuộc D09 HTTP/provider/adapter còn DRAFT | Không fake event picker/fallback fixture; đợt này chỉ mutation ORG, như08–09 |

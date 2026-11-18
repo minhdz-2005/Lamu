@@ -8,23 +8,46 @@ interface AuthHeaderProps {
 }
 
 export function AuthHeader({ theme, onToggleTheme }: AuthHeaderProps) {
-  return <header className="lamu-auth-theme lamu-auth-header">
-    <Link href="/" className="lamu-auth-logo" aria-label={copy.home}>
-      {/* Source SVG preserves the official mark and Vietnamese wordmark. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="lamu-auth-lightLogo" src={copy.logo} width={195} height={60} alt="Lamu" />
-      <img className="lamu-auth-darkLogo" src={copy.darkLogo} width={195} height={60} alt="Lamu" />
-    </Link>
-    <nav className="lamu-auth-nav" aria-label="Điều hướng chính">
-      <Link href="/events">{copy.explore}</Link>
-      <Link className="lamu-auth-create" href="/organizer"><span aria-hidden="true">＋</span>{copy.create}</Link>
-      <Link className="lamu-auth-loginLink" href="/auth">{copy.login}</Link>
-    </nav>
-    <button type="button" className="lamu-auth-themeToggle" onClick={onToggleTheme} aria-label={copy.theme}>
-      <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
-      <span>{theme === "dark" ? copy.light : copy.dark}</span>
-    </button>
-    <style>{`
+  return (
+    <header className="lamu-auth-theme lamu-auth-header">
+      <Link href="/" className="lamu-auth-logo" aria-label={copy.home}>
+        {/* Source SVG preserves the official mark and Vietnamese wordmark. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className="lamu-auth-lightLogo"
+          src={copy.logo}
+          width={195}
+          height={60}
+          alt="Lamu"
+        />
+        <img
+          className="lamu-auth-darkLogo"
+          src={copy.darkLogo}
+          width={195}
+          height={60}
+          alt="Lamu"
+        />
+      </Link>
+      <nav className="lamu-auth-nav" aria-label="Điều hướng chính">
+        <Link href="/events">{copy.explore}</Link>
+        <Link className="lamu-auth-create" href="/organizer">
+          <span aria-hidden="true">＋</span>
+          {copy.create}
+        </Link>
+        <Link className="lamu-auth-loginLink" href="/auth">
+          {copy.login}
+        </Link>
+      </nav>
+      <button
+        type="button"
+        className="lamu-auth-themeToggle"
+        onClick={onToggleTheme}
+        aria-label={copy.theme}
+      >
+        <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
+        <span>{theme === "dark" ? copy.light : copy.dark}</span>
+      </button>
+      <style>{`
       .lamu-auth-theme {
         --font-main: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         
@@ -78,17 +101,17 @@ export function AuthHeader({ theme, onToggleTheme }: AuthHeaderProps) {
       .lamu-auth-theme button { font-family: var(--font-main); cursor: pointer; }
       .lamu-auth-theme button:disabled { opacity: .65; cursor: not-allowed; }
       .lamu-auth-theme button:focus-visible, .lamu-auth-theme a:focus-visible, .lamu-auth-theme summary:focus-visible { outline: 2px solid var(--sage); outline-offset: 3px; }
-      .lamu-auth-header { max-width: 1200px; min-height: 108px; margin: 0 auto; padding: 24px 20px; display: flex; align-items: center; gap: 16px; background: var(--bg); color: var(--text-main); font: 13.5px/1.5 var(--font-main); }
+      .lamu-auth-header { max-width: 1200px; min-height: 108px; margin: 0 auto; padding: 24px 28px; display: flex; align-items: center; gap: 16px; background: var(--bg); color: var(--text-main); font: 13.5px/1.5 var(--font-main); }
       .lamu-auth-logo { display: inline-flex; align-items: center; margin-right: auto; flex-shrink: 0; }
       .lamu-auth-logo img { display: block; max-width: 100%; height: auto; }
       .lamu-auth-logo .lamu-auth-darkLogo { display: none; }
       [data-theme="dark"] .lamu-auth-logo .lamu-auth-lightLogo { display: none; }
       [data-theme="dark"] .lamu-auth-logo .lamu-auth-darkLogo { display: block; }
       .lamu-auth-nav { display: flex; align-items: center; gap: 12px; }
-      .lamu-auth-nav a { padding: 7px 14px; color: var(--text-sub); text-decoration: none; font-weight: 500; white-space: nowrap; }
+      .lamu-auth-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 7px 14px; color: var(--text-sub); text-decoration: none; font-weight: 500; white-space: nowrap; }
       .lamu-auth-nav .lamu-auth-create, .lamu-auth-nav .lamu-auth-loginLink { border: 1px solid var(--border); border-radius: 20px; color: var(--text-main); font-weight: 600; }
       .lamu-auth-nav .lamu-auth-create { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-subtle); }
-      .lamu-auth-theme .lamu-auth-themeToggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface-subtle); color: var(--text-main); font-size: 13px; font-weight: 500; box-shadow: none; white-space: nowrap; }
+      .lamu-auth-theme .lamu-auth-themeToggle { display: inline-flex; align-items: center; min-height: 44px; gap: 6px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface-subtle); color: var(--text-main); font-size: 13px; font-weight: 500; box-shadow: none; white-space: nowrap; }
       .lamu-auth-theme .lamu-auth-themeToggle:hover, .lamu-auth-nav a:hover { background: var(--surface-subtle); color: var(--text-main); }
       @media (max-width: 640px) {
         .lamu-auth-header { min-height: 88px; padding: 14px 18px; gap: 8px; flex-wrap: wrap; }
@@ -97,5 +120,6 @@ export function AuthHeader({ theme, onToggleTheme }: AuthHeaderProps) {
         .lamu-auth-nav a { padding: 7px 10px; font-size: 12.5px; }
       }
     `}</style>
-  </header>;
+    </header>
+  );
 }

@@ -29,7 +29,8 @@ export interface InboxFixture {
   readonly state: "success" | "empty" | "loading" | "error" | "rate_limit" | "profile_refresh_error";
   readonly invitations: readonly InboxInvitation[];
   readonly actionPreview?: InvitationActionPreview;
-  readonly requestId?: string;
+  readonly message?: string;
+  readonly blocked?: boolean;
 }
 
 export const inboxCopy = {
@@ -48,10 +49,11 @@ export const inboxCopy = {
   acceptDescription: "Xác nhận tham gia tổ chức với vai trò được mời dưới đây.", declineDescription: "Bạn muốn từ chối lời mời tham gia tổ chức dưới đây?",
   snapshot: "Đây là vai trò tại thời điểm mời, không phải xác nhận quyền hiện tại của bạn.",
   submitting: "Đang xử lý…", unknown: "Chưa xác định được kết quả phản hồi. Vui lòng kiểm tra lại thao tác trước khi tiếp tục.", check: "Kiểm tra lại thao tác",
-  error: "Không thể tải danh sách lời mời. Vui lòng thử lại.", errorDetails: "Chi tiết lỗi", rateLimit: "Bạn thao tác quá nhanh. Vui lòng chờ rồi thử lại.",
+  error: "Không thể tải danh sách lời mời. Vui lòng thử lại.", rateLimit: "Bạn thao tác quá nhanh. Vui lòng chờ rồi thử lại.",
   expiredError: "Lời mời đã hết hạn. Vui lòng tải lại danh sách.", processedError: "Trạng thái lời mời đã thay đổi. Vui lòng tải lại danh sách.",
   memberError: "Bạn đã là thành viên của tổ chức này. Vui lòng kiểm tra lại thông tin tại Tổ chức của tôi.", forbiddenError: "Bạn không đủ quyền thực hiện thao tác này. Vui lòng tải lại danh sách.",
   profileWarning: "Đã chấp nhận lời mời nhưng chưa tải lại hồ sơ được. Bạn có thể mở tổ chức hoặc tải lại hồ sơ.", reloadProfile: "Tải lại hồ sơ",
+  accepted: "Đã chấp nhận lời mời.", declined: "Đã từ chối lời mời.",
   show: "Hiển thị", of: "trên tổng số", invitations: "lời mời", size: "Kích thước", previous: "Trước", next: "Sau", perPage: "/ trang",
 } as const;
 
@@ -80,7 +82,7 @@ export function createInboxFixture(scenario = "success", actionName = ""): Inbox
     : state === "profile_refresh_error" ? [{ ...sampleInvitations[0], status: "ACCEPTED" as const, processed_at: "2026-11-15T03:00:00Z" }, ...sampleInvitations.slice(1)] : sampleInvitations;
   const action: InvitationAction = actionName.startsWith("decline") || actionName === "event_decline" ? "decline" : "accept";
   const phase: InvitationActionPhase = actionName.includes("submitting") ? "submitting" : actionName === "unknown" || actionName === "expired" || actionName === "not_pending" || actionName === "already_member" || actionName === "forbidden" ? actionName : "normal";
-  return { state, invitations, requestId: state === "error" ? "PREVIEW-INBOX-001" : undefined, actionPreview: actionName ? { invitationId: actionName === "event_decline" ? sampleInvitations[3].id : sampleInvitations[0].id, action, phase } : undefined };
+  return { state, invitations, actionPreview: actionName ? { invitationId: actionName === "event_decline" ? sampleInvitations[3].id : sampleInvitations[0].id, action, phase } : undefined };
 }
 
 const timestampFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });

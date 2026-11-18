@@ -2,7 +2,7 @@
 
 **Route:** `/me/invitations` · **Cần đăng nhập:** Bắt buộc, không cần membership trước · **Ưu tiên:** M4 Identity — 5 · **API:** `GET /api/users/me/invitations`, `POST /api/users/me/invitations/{id}/accept`, `POST /api/users/me/invitations/{id}/decline`, `GET /api/users/me`
 
-Mục tiêu: user mới có thể tham gia tổ chức bằng lời mời trong ứng dụng, không phụ thuộc email hoặc Event. **Trạng thái: thiết kế M4, chưa triển khai/chưa nghiệm thu.** Authority: [Identity OpenAPI v1.2.0](../../shared/contracts/http/identity.openapi.json), schemas `Invitations`, `Invitation`, `InvitationAction`, `InvitationAccepted`, `InvitationDeclined`; [00](00-conventions.md). Không dùng Notification API hoặc lời mời theo token URL.
+Mục tiêu: user mới có thể tham gia tổ chức bằng lời mời trong ứng dụng, không phụ thuộc email hoặc Event. **Trạng thái: đã nối Identity API ở local.** Authority: [Identity OpenAPI v1.5.0](../../shared/contracts/http/identity.openapi.json), schemas `Invitations`, `Invitation`, `InvitationAction`, `InvitationAccepted`, `InvitationDeclined`; [00](00-conventions.md). Không dùng Notification API hoặc lời mời theo token URL.
 
 ## 1. Layout
 
@@ -87,7 +87,7 @@ ACCEPTED có link Mở tổ chức nhưng backend vẫn kiểm membership hiện
 
 | State | Khi nào | Nội dung |
 |---|---|---|
-| Loading / Error | request chờ/thất bại | skeleton hoặc message/request_id/Tải lại |
+| Loading / Error | request chờ/thất bại | skeleton khi đang tải, thông báo tiếng Việt và nút Tải lại khi lỗi |
 | Empty | 200 items rỗng | “Bạn chưa có lời mời nào”; link Tổ chức của tôi/Tạo tổ chức |
 | PENDING | server trả chờ | “Đang chờ”, expiry và actions theo scope |
 | ACCEPTED | server xác nhận | “Đã chấp nhận”, link Mở tổ chức; snapshot role có nhãn lịch sử |
@@ -117,5 +117,6 @@ ACCEPTED có link Mở tổ chức nhưng backend vẫn kiểm membership hiện
 - [ ] Unknown outcome được giữ riêng; success replay cùng key không bị UI biến thành fresh action.
 - [ ] EVENT snapshot chỉ đọc/disable fresh accept có lý do; decline không bị cấm theo inviter/EVENT resolver.
 - [ ] Receipt accept200 không bị xóa vì Profile reload lỗi; không hồi sinh session sau logout.
-- [ ] Keyboard/modal focus/mobile/theme và request_id an toàn được kiểm.
-- [ ] Khi test thật tạo `docs/ui/reports/09-my-invitations.md`; browser/Event provider integration hiện **NOT RUN**.
+- [ ] Kiểm tra thao tác bàn phím, focus trong modal, bố cục mobile, theme và thông báo lỗi tiếng Việt.
+
+Kết quả kiểm chứng theo từng route ở [báo cáo UI local](reports/identity-pages-integration-02.md).

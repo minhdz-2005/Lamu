@@ -1,3 +1,7 @@
+import type { Membership } from "@/lib/types";
+import { emptyCover } from "@/lib/organizationProfile";
+import { previewOrganizationCover } from "@/features/organizations/organizationsData";
+
 export interface RoleAssignment {
   readonly code: string;
   readonly resource_type: string;
@@ -16,15 +20,17 @@ export interface OrganizationView {
   readonly id: string;
   readonly name: string;
   readonly slug: string;
-  readonly my_roles: readonly RoleAssignment[];
+  readonly my_roles: readonly string[];
+  readonly description: NonNullable<Membership["description"]> | null;
+  readonly cover: NonNullable<Membership["cover"]>;
 }
 
 export type DetailPresentation = "owner" | "admin" | "member";
 export type MembersState = "success" | "loading" | "empty" | "error";
-export type DetailState = "success" | "loading" | "forbidden" | "not_found";
+export type DetailState = "success" | "loading" | "forbidden" | "not_found" | "error" | "anonymous" | "unavailable";
 export type DetailDialogKind = "invite" | "roles" | "revoke";
 export type DetailDialogPhase = "normal" | "inline_error" | "recipient_error" | "submitting" | "last_owner" | "unknown";
-export type ReceiptStatus = "PENDING" | "REVOKED" | "EXPIRED";
+export type ReceiptStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED" | "EXPIRED";
 
 export interface InvitationReceiptData {
   readonly id: string;
@@ -32,6 +38,7 @@ export interface InvitationReceiptData {
   readonly email: string;
   readonly status: ReceiptStatus;
   readonly expiresLabel: string;
+  readonly expiresAt?: string;
   readonly roles: readonly RoleAssignment[];
 }
 
@@ -47,10 +54,10 @@ export interface DetailFixture {
 
 export const detailCopy = {
   back: "Tổ chức của tôi", title: "Chi tiết tổ chức", slug: "Định danh (Slug):",
-  overview: "Tổng quan", members: "Thành viên", list: "Danh sách thành viên",
+  overview: "Tổng quan", members: "Thành viên", sent: "Lời mời đã gửi", list: "Danh sách thành viên",
   basic: "Thông tin căn bản", organizationName: "Tên tổ chức", identifier: "Định danh tổ chức (Slug)",
   myRoles: "Vai trò của tôi", scopeHeading: "Phạm vi quản trị", administration: "Quyền quản trị",
-  toMembers: "Đến trang Thành viên", readOnly: "Thông tin tổ chức chỉ đọc.",
+  toMembers: "Đến trang Thành viên",
   scope: "Phạm vi", orgScope: "Tổ chức", eventScope: "Sự kiện (EVENT)", noRole: "Không có vai trò",
   owner: "Chủ sở hữu (OWNER)", admin: "Quản trị viên (ADMIN)", ordinaryMember: "Thành viên thường",
   ownerGuidance: "Với vai trò Chủ sở hữu (OWNER), bạn có thể quản lý thành viên, tạo lời mời và thay đổi tập vai trò ORG. Chuyển sang tab Thành viên để xem danh sách.",
@@ -109,7 +116,14 @@ export function createDetailFixture(orgId: string, scenario: string = defaultDet
   const receiptStatus: ReceiptStatus | undefined = scenario === "receipt_pending" ? "PENDING" : scenario === "receipt_revoked" ? "REVOKED" : scenario === "receipt_expired" ? "EXPIRED" : undefined;
   return {
     state, presentation, membersState, initialTab: presentation === "member" ? "overview" : "members",
-    organization: { id: orgId, name: scenario === "long_content" ? "Cộng đồng nghiên cứu, thiết kế và sáng tạo những trải nghiệm kết nối dành cho tất cả mọi người" : name, slug: scenario === "long_content" ? "dinh-danh-to-chuc-rat-dai-".repeat(7) : slug, my_roles: presentation === "member" ? [] : [orgRole(presentation === "admin" ? "ADMIN" : "OWNER")] },
+    organization: {
+      id: orgId,
+      name: scenario === "long_content" ? "Cộng đồng nghiên cứu, thiết kế và sáng tạo những trải nghiệm kết nối dành cho tất cả mọi người" : name,
+      slug: scenario === "long_content" ? "dinh-danh-to-chuc-rat-dai-".repeat(7) : slug,
+      my_roles: presentation === "member" ? [] : [presentation === "admin" ? "ADMIN" : "OWNER"],
+      description: presentation === "member" ? null : "Không gian để chia sẻ dự án và cùng học hỏi.\nGặp gỡ và trao đổi vào thứ Năm hằng tuần.",
+      cover: presentation === "member" ? emptyCover : previewOrganizationCover,
+    },
     members: membersState === "empty" ? [] : scenario === "pagination" ? [...members, ...Array.from({ length: 40 }, (_, index): OrganizationMember => ({ user_id: `a0000000-0000-4000-8000-${String(index + 6).padStart(12, "0")}`, display_name: `Thành viên mẫu ${index + 6}`, status: "ACTIVE", roles: [] }))] : members,
     receipt: receiptStatus ? { id: "b0000000-0000-4000-8000-000000000001", organization_id: orgId, email: "mai.tran@example.test", status: receiptStatus, expiresLabel: "22/11/2026 · 10:00", roles: [orgRole("ADMIN")] } : undefined,
   };
@@ -119,3 +133,32 @@ export function createDetailFixture(orgId: string, scenario: string = defaultDet
 export function supportsOrgEditor(member: OrganizationMember, orgId: string): boolean {
   return member.roles.every((role) => role.resource_type === "ORG" && role.resource_id === orgId && (role.code === "OWNER" || role.code === "ADMIN"));
 }
+
+export function resolveDetailPresentation(orgRoles: readonly string[], profileRoles: readonly string[]): DetailPresentation {
+  const canOwn = orgRoles.includes("OWNER") && profileRoles.includes("OWNER");
+  if (canOwn) return "owner";
+  const canAdminister = (orgRoles.includes("OWNER") || orgRoles.includes("ADMIN")) &&
+    (profileRoles.includes("OWNER") || profileRoles.includes("ADMIN"));
+  return canAdminister ? "admin" : "member";
+}
+
+export function lastPageOffset(offset: number, limit: number, total: number): number {
+  return offset > 0 && offset >= total ? Math.floor(Math.max(0, total - 1) / limit) * limit : offset;
+}
+
+export const invitationStatusLabel: Record<ReceiptStatus, string> = {
+  PENDING: detailCopy.pending,
+  ACCEPTED: "Đã chấp nhận",
+  DECLINED: "Đã từ chối",
+  REVOKED: detailCopy.revoked,
+  EXPIRED: detailCopy.expired,
+};
+
+const invitationDate = new Intl.DateTimeFormat("vi-VN", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "Asia/Saigon",
+});
+export const formatInvitationDate = (timestamp: string) => invitationDate.format(new Date(timestamp));
+export const canRevokeInvitation = (status: ReceiptStatus, expiresAt: string, now = Date.now()) =>
+  status === "PENDING" && Date.parse(expiresAt) > now;

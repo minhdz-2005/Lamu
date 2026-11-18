@@ -1,15 +1,20 @@
+import type { Avatar, Membership } from "@/lib/types";
+
 /** Presentation fixtures only. No session, cache, permissions or API state. */
 export interface AccountMembership {
   readonly organizationId: string;
   readonly name: string;
   readonly slug: string;
   readonly roles: readonly string[];
+  readonly description?: Membership["description"];
+  readonly cover?: Membership["cover"];
 }
 
 export interface AccountProfile {
   readonly displayName: string;
   readonly email: string;
   readonly initials: string;
+  readonly avatar?: Avatar;
   readonly memberships: readonly AccountMembership[];
 }
 
@@ -20,7 +25,6 @@ export interface AccountNoticeData {
   readonly icon?: "notice" | "lock" | "clock";
   readonly title: string;
   readonly description?: string;
-  readonly requestId?: string;
   readonly action?: "retry" | "login";
 }
 
@@ -52,7 +56,6 @@ export const accountCopy = {
   loggingOut: "Đang đăng xuất…",
   loading: "Đang tải thông tin tài khoản…",
   login: "Về trang đăng nhập",
-  details: "Chi tiết yêu cầu",
   navigation: "Điều hướng tài khoản",
   nav: [
     { label: "Tài khoản", href: "/me" },
@@ -78,7 +81,7 @@ export const accountFixtures: Readonly<Record<AccountState, AccountFixture>> = {
   loading: { state: "loading", profile: null },
   network_error: {
     state: "network_error", profile,
-    notice: { kind: "danger", title: "Không tải được thông tin tài khoản. Vui lòng thử lại.", description: "Dữ liệu bên dưới được giữ lại từ phiên trước để tham khảo và có thể chưa được cập nhật.", action: "retry", requestId: "PREVIEW-NETWORK-001" },
+    notice: { kind: "danger", title: "Không tải được thông tin tài khoản. Vui lòng thử lại.", description: "Dữ liệu bên dưới được giữ lại từ phiên trước để tham khảo và có thể chưa được cập nhật.", action: "retry" },
   },
   account_unavailable: {
     state: "account_unavailable", profile: null,
@@ -102,9 +105,8 @@ export const accountFixtures: Readonly<Record<AccountState, AccountFixture>> = {
   },
 };
 
-/** Only development previews consume a query parameter; production always uses success. */
-export function getAccountPreview(value: string | null): AccountFixture {
+export function getAccountPreview(value: string | null): AccountFixture | null {
   return process.env.NODE_ENV === "development" && value && Object.hasOwn(accountFixtures, value)
     ? accountFixtures[value as AccountState]
-    : accountFixtures.success;
+    : null;
 }

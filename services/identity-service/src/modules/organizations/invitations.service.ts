@@ -22,6 +22,30 @@ type Outcome =
   | Result
   | { verify: Assignment[]; org: string }
   | { expired: true };
+
+function invitationSnapshot(
+  row: OrganizationInvitation,
+  now: Date,
+): Omit<
+  components["schemas"]["Invitation"],
+  "organization_name" | "organization_slug"
+> {
+  const expired = row.status === "PENDING" && row.expires_at <= now;
+  return {
+    id: row.id,
+    organization_id: row.organization_id,
+    inviter_user_id: row.inviter_user_id,
+    roles: row.roles as Assignment[],
+    status: (expired
+      ? "EXPIRED"
+      : row.status) as components["schemas"]["Invitation"]["status"],
+    created_at: row.created_at.toISOString(),
+    expires_at: row.expires_at.toISOString(),
+    processed_at:
+      (expired ? row.expires_at : row.processed_at)?.toISOString() ?? null,
+  };
+}
+
 @Injectable()
 export class InvitationsService {
   constructor(
@@ -120,25 +144,47 @@ export class InvitationsService {
           total,
           limit,
           offset,
-          items: rows.map((row) => {
-            const expired = row.status === "PENDING" && row.expires_at <= now;
-            return {
-              id: row.id,
-              organization_id: row.organization_id,
-              organization_name: row.organization.name,
-              organization_slug: row.organization.slug,
-              inviter_user_id: row.inviter_user_id,
-              roles: row.roles as Assignment[],
-              status: (expired
-                ? "EXPIRED"
-                : row.status) as components["schemas"]["Invitation"]["status"],
-              created_at: row.created_at.toISOString(),
-              expires_at: row.expires_at.toISOString(),
-              processed_at:
-                (expired ? row.expires_at : row.processed_at)?.toISOString() ??
-                null,
-            };
-          }),
+          items: rows.map((row) => ({
+            ...invitationSnapshot(row, now),
+            organization_name: row.organization.name,
+            organization_slug: row.organization.slug,
+          })),
+        };
+      },
+      { isolationLevel: "RepeatableRead" },
+    );
+  }
+  async listSent(
+    actor: string,
+    org: string,
+    limit: number,
+    offset: number,
+  ): Promise<components["schemas"]["OrganizationInvitations"]> {
+    return this.db.$transaction(
+      async (tx) => {
+        await this.owner(tx, actor, org);
+        const where = { organization_id: org };
+        const total = await tx.organizationInvitation.count({ where });
+        const rows = await tx.organizationInvitation.findMany({
+          where,
+          orderBy: [{ created_at: "desc" }, { id: "desc" }],
+          take: limit,
+          skip: offset,
+          include: {
+            invitee: { select: { display_name: true, email: true } },
+          },
+        });
+        const now = this.now();
+        return {
+          total,
+          limit,
+          offset,
+          items: rows.map((row) => ({
+            ...invitationSnapshot(row, now),
+            invitee_user_id: row.invitee_user_id,
+            invitee_display_name: row.invitee.display_name,
+            invitee_email: row.invitee.email,
+          })),
         };
       },
       { isolationLevel: "RepeatableRead" },

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AuthHeader } from "@/features/auth/AuthHeader";
 import { AccountHeader } from "@/features/account/AccountHeader";
+import { useSignOut } from "@/features/account/useSignOut";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -37,8 +38,7 @@ function SunIcon() {
 
 export function Header() {
   const pathname = usePathname();
-  // Sample account/organization routes never mount the session-connected header.
-  if (pathname === "/me") return <AccountHeader />;
+  if (pathname === "/me") return null;
   if (pathname === "/me/invitations") return <AccountHeader activeHref="/me/invitations" />;
   if (pathname === "/organizations") return <AccountHeader activeHref="/organizations" />;
   if (/^\/organizations\/[^/]+$/.test(pathname)) return <AccountHeader activeHref="/organizations" />;
@@ -47,7 +47,9 @@ export function Header() {
 
 function SiteHeader() {
   const pathname = usePathname();
-  const { state, profile, organizations, logout } = useSession();
+  const session = useSession();
+  const { state, profile, organizations } = session;
+  const { signOut, loggingOut, notice } = useSignOut(session);
   const [theme, setTheme] = useState<Theme | null>(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -123,14 +125,14 @@ function SiteHeader() {
 
           {authed ? (
             <>
-              <span className="user-chip" title={profile?.email}>
+              <Link href="/me" className="user-chip" title={profile?.email}>
                 <span className="avatar" aria-hidden="true">
                   {initials(profile?.display_name)}
                 </span>
                 <span>{profile?.display_name || "Khách"}</span>
-              </span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void logout()}>
-                Đăng xuất
+              </Link>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={loggingOut} onClick={() => void signOut()}>
+                {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
               </button>
             </>
           ) : (
@@ -140,6 +142,7 @@ function SiteHeader() {
           )}
         </div>
       </div>
+      {notice && <p className="small" role="status">{notice}</p>}
     </header>
   );
 }

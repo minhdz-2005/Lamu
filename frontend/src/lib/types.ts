@@ -1,6 +1,7 @@
 // Shape khớp docs/api/catalog.md. Field UI đọc đều có trong contract, không tự thêm.
 
 export type ErrorCode =
+  | import("../../../shared/contracts/http/generated/identity").components["schemas"]["Error"]["error"]["code"]
   | "VALIDATION_FAILED"
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
@@ -20,25 +21,21 @@ export interface ApiErrorBody {
   error: { code: ErrorCode; message: string; request_id: string };
 }
 
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
+export type AuthTokens =
+  import("../../../shared/contracts/http/generated/identity").components["schemas"]["Tokens"];
 
-export interface Membership {
-  organization_id: string;
-  name: string;
-  slug: string;
-  roles: string[];
-}
+type IdentitySchemas = import("../../../shared/contracts/http/generated/identity").components["schemas"];
+export type Avatar = IdentitySchemas["MediaDisplay"];
+type IdentityMembership = IdentitySchemas["Profile"]["memberships"][number];
+// Older cached profiles may omit the description and cover.
+export type Membership = Pick<IdentityMembership, "organization_id" | "name" | "slug"> &
+  Partial<Pick<IdentityMembership, "description" | "cover">> & { roles: string[] };
 
-export interface MeProfile {
-  id: string;
-  email: string;
-  display_name: string;
-  memberships: Membership[];
-}
+// Cached profiles written before avatar support can omit the media field.
+export type MeProfile = Pick<
+  IdentitySchemas["Profile"],
+  "id" | "email" | "display_name"
+> & { memberships: Membership[]; avatar?: Avatar };
 
 export type EventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
 export type TicketTypeStatus = "ACTIVE" | "CLOSED";
@@ -129,12 +126,19 @@ export interface HeldReservationResult {
   currency: string;
 }
 
-export type ReservationCreateResult = FreeReservationResult | HeldReservationResult;
+export type ReservationCreateResult =
+  | FreeReservationResult
+  | HeldReservationResult;
 
 export interface ReservationState {
   status: ReservationStatus;
   expires_at: string;
-  items: { ticket_type_id: string; name: string; quantity: number; unit_price: string }[];
+  items: {
+    ticket_type_id: string;
+    name: string;
+    quantity: number;
+    unit_price: string;
+  }[];
   total_amount: string;
   payment_status: PaymentStatus;
 }

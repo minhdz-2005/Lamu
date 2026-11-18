@@ -92,6 +92,7 @@ export class OrganizationsService {
       id: row.id,
       name: row.name,
       slug: row.slug,
+      description: row.description,
       cover: mediaDisplay(row.cover_asset, row.cover_revision),
       my_roles: [
         ...new Set(
@@ -101,6 +102,25 @@ export class OrganizationsService {
         ),
       ].sort(),
     };
+  }
+  async updateDescription(
+    actor: string,
+    org: string,
+    description: string | null,
+  ): Promise<components["schemas"]["OrganizationDescriptionResult"]> {
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('lock_timeout','2s',true)`;
+      await this.lockOrg(tx, org);
+      await this.lockUsers(tx, [actor]).catch((error) =>
+        this.lockError(error, "CONFLICT"),
+      );
+      await this.authorization.requireOrg(actor, org, "org.profile.update", tx);
+      return tx.organization.update({
+        where: { id: org },
+        data: { description },
+        select: { description: true },
+      });
+    });
   }
   async members(
     actor: string,
@@ -350,6 +370,8 @@ export class OrganizationsService {
     }
   }
   async create(actor: string, key: string, dto: CreateOrganizationDto) {
+    const description = dto.description ?? null;
+    const payload = { name: dto.name, slug: dto.slug ?? null };
     const base = dto.name
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
@@ -375,7 +397,7 @@ export class OrganizationsService {
           "CREATE_ORGANIZATION",
           key,
           {},
-          { name: dto.name, slug: dto.slug ?? null },
+          description === null ? payload : { ...payload, description },
           async (tx) => {
             let slug = dto.slug ?? generatedBase;
             if (
@@ -393,6 +415,7 @@ export class OrganizationsService {
                 id: randomUUID(),
                 name: dto.name,
                 slug,
+                description,
                 created_by: actor,
               },
             });

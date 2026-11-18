@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Identity auth, organizations, media and recovery",
-    "version": "1.4.0",
-    "description": "Canonical HTTP contract v1.4.0. Session validation immediately rejects revoked access on protected Identity routes; logout retry is permitted only with matching current refresh proof until session expiry. Recovery is self-contained in Identity with encrypted DB mail jobs. Media uses signed direct Cloudinary uploads and provider verification before CAS commit. See ADR 0006."
+    "version": "1.5.0",
+    "description": "Canonical HTTP contract v1.5.0. Adds an OWNER-only, non-cacheable paginated list of sent organization invitations. Patch adds the existing INVALID_RECOVERY provider error to the shared enum. Session validation immediately rejects revoked access on protected Identity routes; logout retry is permitted only with matching current refresh proof until session expiry. Recovery is self-contained in Identity with encrypted DB mail jobs. Media uses signed direct Cloudinary uploads and provider verification before CAS commit. See ADR 0006."
   },
   "servers": [
     {
@@ -658,6 +658,157 @@
         "x-gateway-auth": true
       }
     },
+    "/users/me/password": {
+      "post": {
+        "operationId": "changeMyPassword",
+        "tags": [
+          "Identity M1"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Single UUID; otherwise a new UUID is generated. Not an identity claim."
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          },
+          {
+            "name": "X-Session-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordChanged"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED / CURRENT_PASSWORD_INCORRECT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "UPSTREAM_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "UPSTREAM_TIMEOUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-gateway-auth": true,
+        "description": "Change the authenticated user's password and revoke all sessions and unused recovery credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "health",
@@ -1001,6 +1152,168 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganizationDescription",
+        "tags": [
+          "Identity M2 P5"
+        ],
+        "security": [],
+        "x-gateway-auth": true,
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Single UUID; otherwise a new UUID is generated. Not an identity claim."
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          },
+          {
+            "name": "X-Session-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          },
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDescriptionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "UPSTREAM_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "UPSTREAM_TIMEOUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires org.profile.update in the target organization. The description field is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrganizationDescription"
               }
             }
           }
@@ -1664,6 +1977,179 @@
       }
     },
     "/organizations/{orgId}/members/invitations": {
+      "get": {
+        "operationId": "listOrganizationInvitations",
+        "tags": [
+          "Identity M2 P6"
+        ],
+        "security": [],
+        "x-gateway-auth": true,
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Single UUID; otherwise a new UUID is generated. Not an identity claim."
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          },
+          {
+            "name": "X-Session-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Trusted internal context set only by Gateway after JWT verification; never accepted from public clients."
+          },
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consistent page and total of sent organization invitations.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationInvitations"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Privacy protection for recipient contact data.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "UPSTREAM_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "UPSTREAM_TIMEOUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "ACTIVE account with an ACTIVE membership and the ORG OWNER role may list all invitations for this organization, including invitations sent by other owners. All lifecycle states, newest first by created_at DESC then id DESC. An elapsed PENDING invitation reads as EXPIRED with processed_at equal to expires_at without modifying persistence. Recipient name and email come from the current Identity account. Missing organizations and insufficient permissions follow the existing organization authorization responses."
+      },
       "post": {
         "operationId": "createInvitation",
         "tags": [
@@ -4103,7 +4589,8 @@
                 "name",
                 "slug",
                 "roles",
-                "cover"
+                "cover",
+                "description"
               ],
               "properties": {
                 "organization_id": {
@@ -4131,6 +4618,9 @@
                 },
                 "cover": {
                   "$ref": "#/components/schemas/MediaDisplay"
+                },
+                "description": {
+                  "$ref": "#/components/schemas/OrganizationDescription"
                 }
               }
             }
@@ -4184,6 +4674,7 @@
                   "SERVICE_UNAVAILABLE",
                   "INTERNAL_ERROR",
                   "RATE_LIMITED",
+                  "INVALID_RECOVERY",
                   "SLUG_TAKEN",
                   "LAST_OWNER_REQUIRED",
                   "IDEMPOTENCY_KEY_REQUIRED",
@@ -4193,7 +4684,8 @@
                   "ALREADY_MEMBER",
                   "INVITATION_ALREADY_PENDING",
                   "INVITATION_EXPIRED",
-                  "INVITATION_NOT_PENDING"
+                  "INVITATION_NOT_PENDING",
+                  "CURRENT_PASSWORD_INCORRECT"
                 ]
               },
               "message": {
@@ -4290,6 +4782,12 @@
             "maxLength": 63,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "description": "Optional explicit slug, trimmed and lowercase. When omitted, Identity generates a unique slug from name: NFD accents removed, Vietnamese đ mapped to d, lowercase ASCII letters/digits and hyphens; short names prefixed with org-, empty transliteration uses organization, maximum 63 characters. Collisions receive a UUID suffix. Explicit slug collisions still return 409 SLUG_TAKEN."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional. Limited to 1,000 Unicode code points after trimming. Omitted, null and blank values all store null and preserve idempotent replay of requests without a description.",
+            "pattern": "^[^\\u0000]*$"
           }
         }
       },
@@ -4314,7 +4812,8 @@
           "name",
           "slug",
           "my_roles",
-          "cover"
+          "cover",
+          "description"
         ],
         "properties": {
           "id": {
@@ -4342,6 +4841,9 @@
           },
           "cover": {
             "$ref": "#/components/schemas/MediaDisplay"
+          },
+          "description": {
+            "$ref": "#/components/schemas/OrganizationDescription"
           }
         }
       },
@@ -4848,6 +5350,115 @@
           }
         }
       },
+      "OrganizationInvitationSent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "organization_id",
+          "inviter_user_id",
+          "invitee_user_id",
+          "invitee_display_name",
+          "invitee_email",
+          "roles",
+          "status",
+          "created_at",
+          "expires_at",
+          "processed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inviter_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invitee_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invitee_display_name": {
+            "type": "string",
+            "description": "Current invitee display name."
+          },
+          "invitee_email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "description": "Current invitee email. Visible only to active owners of this organization."
+          },
+          "roles": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/RoleAssignment"
+            },
+            "description": "Immutable scoped assignment snapshot from invitation creation."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "DECLINED",
+              "REVOKED",
+              "EXPIRED"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "OrganizationInvitations": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationInvitationSent"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        }
+      },
       "ForgotPasswordRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -5058,6 +5669,75 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "format": "password"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "format": "password"
+          }
+        }
+      },
+      "PasswordChanged": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK"
+            ]
+          }
+        }
+      },
+      "OrganizationDescription": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 1000
+      },
+      "UpdateOrganizationDescription": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Trimmed to at most 1,000 Unicode code points. Null or a blank string clears the description.",
+            "pattern": "^[^\\u0000]*$"
+          }
+        }
+      },
+      "OrganizationDescriptionResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "$ref": "#/components/schemas/OrganizationDescription"
           }
         }
       }

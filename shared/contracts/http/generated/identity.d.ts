@@ -84,6 +84,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Change the authenticated user's password and revoke all sessions and unused recovery credentials. */
+        post: operations["changeMyPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -146,7 +163,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Requires org.profile.update in the target organization. The description field is required. */
+        patch: operations["updateOrganizationDescription"];
         trace?: never;
     };
     "/organizations/{orgId}/members": {
@@ -236,7 +254,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description ACTIVE account with an ACTIVE membership and the ORG OWNER role may list all invitations for this organization, including invitations sent by other owners. All lifecycle states, newest first by created_at DESC then id DESC. An elapsed PENDING invitation reads as EXPIRED with processed_at equal to expires_at without modifying persistence. Recipient name and email come from the current Identity account. Missing organizations and insufficient permissions follow the existing organization authorization responses. */
+        get: operations["listOrganizationInvitations"];
         put?: never;
         /** @description ACTIVE OWNER only, existing ACTIVE invitee, no membership even INACTIVE. Unique PENDING per org/recipient; expired PENDING becomes EXPIRED before new creation. Snapshot immutable. Replay requires current OWNER, not original eligibility. Seven-day absolute expiry (expires_at <= current time), checked after locks. Idempotency success TTL 24h, key wait 2s; replay checks current rights before cached success, never requires PENDING. No invitation event. Error envelope and auth/session M1 unchanged. */
         post: operations["createInvitation"];
@@ -477,6 +496,7 @@ export interface components {
                 slug: string;
                 roles: ("OWNER" | "ADMIN" | "SPEAKER" | "ATTENDEE")[];
                 cover: components["schemas"]["MediaDisplay"];
+                description: components["schemas"]["OrganizationDescription"];
             }[];
             avatar: components["schemas"]["MediaDisplay"];
         };
@@ -487,7 +507,7 @@ export interface components {
         Error: {
             error: {
                 /** @enum {string} */
-                code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "EMAIL_TAKEN" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR" | "RATE_LIMITED" | "SLUG_TAKEN" | "LAST_OWNER_REQUIRED" | "IDEMPOTENCY_KEY_REQUIRED" | "CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "EVENT_SCOPE_UNVERIFIED" | "ALREADY_MEMBER" | "INVITATION_ALREADY_PENDING" | "INVITATION_EXPIRED" | "INVITATION_NOT_PENDING";
+                code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "EMAIL_TAKEN" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR" | "RATE_LIMITED" | "INVALID_RECOVERY" | "SLUG_TAKEN" | "LAST_OWNER_REQUIRED" | "IDEMPOTENCY_KEY_REQUIRED" | "CONFLICT" | "IDEMPOTENCY_IN_PROGRESS" | "EVENT_SCOPE_UNVERIFIED" | "ALREADY_MEMBER" | "INVITATION_ALREADY_PENDING" | "INVITATION_EXPIRED" | "INVITATION_NOT_PENDING" | "CURRENT_PASSWORD_INCORRECT";
                 message: string;
                 /** Format: uuid */
                 request_id: string;
@@ -517,6 +537,8 @@ export interface components {
             name: string;
             /** @description Optional explicit slug, trimmed and lowercase. When omitted, Identity generates a unique slug from name: NFD accents removed, Vietnamese đ mapped to d, lowercase ASCII letters/digits and hyphens; short names prefixed with org-, empty transliteration uses organization, maximum 63 characters. Collisions receive a UUID suffix. Explicit slug collisions still return 409 SLUG_TAKEN. */
             slug?: string;
+            /** @description Optional. Limited to 1,000 Unicode code points after trimming. Omitted, null and blank values all store null and preserve idempotent replay of requests without a description. */
+            description?: string | null;
         };
         OrganizationCreatedResult: {
             /** Format: uuid */
@@ -529,6 +551,7 @@ export interface components {
             slug: string;
             my_roles: ("OWNER" | "ADMIN" | "SPEAKER" | "ATTENDEE")[];
             cover: components["schemas"]["MediaDisplay"];
+            description: components["schemas"]["OrganizationDescription"];
         };
         PublicOrganization: {
             name: string;
@@ -661,6 +684,39 @@ export interface components {
             limit: number;
             offset: number;
         };
+        OrganizationInvitationSent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            inviter_user_id: string;
+            /** Format: uuid */
+            invitee_user_id: string;
+            /** @description Current invitee display name. */
+            invitee_display_name: string;
+            /**
+             * Format: email
+             * @description Current invitee email. Visible only to active owners of this organization.
+             */
+            invitee_email: string;
+            /** @description Immutable scoped assignment snapshot from invitation creation. */
+            roles: components["schemas"]["RoleAssignment"][];
+            /** @enum {string} */
+            status: "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED" | "EXPIRED";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            processed_at: string | null;
+        };
+        OrganizationInvitations: {
+            items: components["schemas"]["OrganizationInvitationSent"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
         ForgotPasswordRequest: {
             /** Format: email */
             email: string;
@@ -715,6 +771,24 @@ export interface components {
                 upload_preset: string;
                 signature: string;
             };
+        };
+        ChangePasswordRequest: {
+            /** Format: password */
+            current_password: string;
+            /** Format: password */
+            new_password: string;
+        };
+        PasswordChanged: {
+            /** @enum {string} */
+            status: "OK";
+        };
+        OrganizationDescription: string | null;
+        UpdateOrganizationDescription: {
+            /** @description Trimmed to at most 1,000 Unicode code points. Null or a blank string clears the description. */
+            description: string | null;
+        };
+        OrganizationDescriptionResult: {
+            description: components["schemas"]["OrganizationDescription"];
         };
     };
     responses: never;
@@ -1224,6 +1298,104 @@ export interface operations {
             };
         };
     };
+    changeMyPassword: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Single UUID; otherwise a new UUID is generated. Not an identity claim. */
+                "X-Request-Id"?: string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-User-Id": string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-Session-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordChanged"];
+                };
+            };
+            /** @description VALIDATION_FAILED / CURRENT_PASSWORD_INCORRECT */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UNAUTHENTICATED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    /** @description Seconds until retry */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description INTERNAL_ERROR */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_UNAVAILABLE */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_TIMEOUT */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -1439,6 +1611,120 @@ export interface operations {
             };
             /** @description NOT_FOUND */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description INTERNAL_ERROR */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_UNAVAILABLE */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_TIMEOUT */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateOrganizationDescription: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Single UUID; otherwise a new UUID is generated. Not an identity claim. */
+                "X-Request-Id"?: string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-User-Id": string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-Session-Id": string;
+            };
+            path: {
+                orgId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationDescription"];
+            };
+        };
+        responses: {
+            /** @description Saved description */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDescriptionResult"];
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UNAUTHENTICATED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CONFLICT */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1898,6 +2184,112 @@ export interface operations {
                 };
             };
             /** @description NOT_FOUND (also LOCKED user) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description INTERNAL_ERROR */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_UNAVAILABLE */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UPSTREAM_TIMEOUT */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listOrganizationInvitations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header: {
+                /** @description Single UUID; otherwise a new UUID is generated. Not an identity claim. */
+                "X-Request-Id"?: string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-User-Id": string;
+                /** @description Trusted internal context set only by Gateway after JWT verification; never accepted from public clients. */
+                "X-Session-Id": string;
+            };
+            path: {
+                orgId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consistent page and total of sent organization invitations. */
+            200: {
+                headers: {
+                    /** @description Privacy protection for recipient contact data. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationInvitations"];
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description UNAUTHENTICATED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description NOT_FOUND */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -19,6 +20,7 @@ import {
   AuthorizationDto,
   CreateOrganizationDto,
   ReplaceRolesDto,
+  UpdateOrganizationDescriptionDto,
 } from "./dto/organization.dto";
 export function uuid(value: string) {
   if (!UUID.test(value)) fail(400, "VALIDATION_FAILED", "Invalid UUID");
@@ -75,6 +77,17 @@ export class OrganizationsController {
   }
   @Get(":orgId") get(@Req() req: IdentityRequest, @Param("orgId") org: string) {
     return this.organizations.get(req.identity.sub.toLowerCase(), uuid(org));
+  }
+  @Patch(":orgId") updateDescription(
+    @Req() req: IdentityRequest,
+    @Param("orgId") org: string,
+    @Body() dto: UpdateOrganizationDescriptionDto,
+  ) {
+    return this.organizations.updateDescription(
+      req.identity.sub.toLowerCase(),
+      uuid(org),
+      dto.description,
+    );
   }
   @Get(":orgId/members") members(
     @Req() req: IdentityRequest,

@@ -60,12 +60,11 @@ export function AuthTabs({ mode, locked, onChange }: AuthTabsProps) {
 interface AuthNoticeProps {
   readonly kind: "error" | "info" | "success" | "warning";
   readonly children: ReactNode;
-  readonly requestId?: string;
 }
 
-export function AuthNotice({ kind, children, requestId }: AuthNoticeProps) {
+export function AuthNotice({ kind, children }: AuthNoticeProps) {
   return <div className="lamu-auth-notice" data-kind={kind} role={kind === "error" ? "alert" : "status"}>
     <span aria-hidden="true">{kind === "success" ? "✓" : "ⓘ"}</span>
-    <div>{children}{requestId && <details className="lamu-auth-details"><summary>{copy.details}</summary><code>{requestId}</code></details>}</div>
+    <div>{children}</div>
   </div>;
 }

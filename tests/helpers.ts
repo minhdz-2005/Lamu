@@ -8,10 +8,25 @@ import { createDatabase } from "../services/identity-service/src/database";
 import { createIdentityApp } from "../services/identity-service/src/app";
 import { createGatewayApp } from "../gateway/src/app";
 import type { OrganizationOptions } from "../services/identity-service/src/modules/organizations/organizations.module";
+import type { RecoveryConfig } from "../services/identity-service/src/security/config";
+import type {
+  MediaConfig,
+  MediaProvider,
+} from "../services/identity-service/src/media/cloudinary";
 export const config = () => validateConfig(process.env, "identity");
-export async function pair(options: OrganizationOptions = {}) {
+export async function pair(
+  options: OrganizationOptions = {},
+  security?: RecoveryConfig,
+  media?: { config: MediaConfig; provider?: MediaProvider },
+) {
   const db = createDatabase(process.env.DATABASE_URL!);
-  const identity = await createIdentityApp(config(), db, options);
+  const identity = await createIdentityApp(
+    config(),
+    db,
+    options,
+    security,
+    media,
+  );
   await identity.listen(0, "127.0.0.1");
   const gateway = await createGatewayApp({
     ...config(),

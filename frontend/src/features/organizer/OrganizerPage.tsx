@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { Banner, Button, ErrorState, Field, Select, Skeleton, Tabs, focusField } from "@/components/ui";
 import { request } from "@/lib/apiClient";
+import { authMode } from "@/lib/authMode";
 import { ApiException, describeError } from "@/lib/errors";
 import { isValidSlug, slugify } from "@/lib/format";
 import { useSession } from "@/lib/useSession";
@@ -30,7 +31,7 @@ export function OrganizerPage() {
   const [orgId, setOrgId] = useState("");
   const [events, setEvents] = useState<OrganizerEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
-  const [eventsError, setEventsError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [eventsError, setEventsError] = useState<{ message: string } | null>(null);
   const [creatingOrg, setCreatingOrg] = useState(false);
 
   const requestedTab = searchParams.get("tab");
@@ -99,6 +100,13 @@ export function OrganizerPage() {
   }
 
   if (state === "ANONYMOUS") return null;
+  if (state === "UNAVAILABLE" || state === "ERROR") {
+    return (
+      <Banner kind="warn">
+        Không thể xác minh phiên. <a href="/me">Mở tài khoản</a>
+      </Banner>
+    );
+  }
 
   if (organizations.length === 0) {
     return (
@@ -111,13 +119,15 @@ export function OrganizerPage() {
         </div>
         <div className="card">
           <Banner kind="warn">Bạn chưa là thành viên tổ chức nào. Tạo tổ chức để bắt đầu.</Banner>
-          <CreateOrgForm
+          {authMode === "real" ? (
+            <Button onClick={() => router.push("/organizations")}>Tạo tổ chức</Button>
+          ) : <CreateOrgForm
             onDone={async (id) => {
               window.sessionStorage.setItem(ORG_KEY, id);
               await reload();
               toast.push("Đã tạo tổ chức.", "success");
             }}
-          />
+          />}
         </div>
       </div>
     );
@@ -233,7 +243,7 @@ function CreateOrgForm({ onDone }: { onDone: (organizationId: string) => void })
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; slug?: string }>({});
-  const [failure, setFailure] = useState<{ message: string; requestId?: string } | null>(null);
+  const [failure, setFailure] = useState<{ message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -252,6 +262,7 @@ function CreateOrgForm({ onDone }: { onDone: (organizationId: string) => void })
       const created = await request<{ organization_id: string }>("/organizations", {
         method: "POST",
         body: { name: name.trim(), slug },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
       });
       onDone(created.organization_id);
     } catch (err) {
@@ -275,7 +286,7 @@ function CreateOrgForm({ onDone }: { onDone: (organizationId: string) => void })
         void submit();
       }}
     >
-      {failure && <ErrorState message={failure.message} requestId={failure.requestId} />}
+      {failure && <ErrorState message={failure.message} />}
       <Field
         name="name"
         label="Tên tổ chức"

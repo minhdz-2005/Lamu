@@ -19,7 +19,7 @@ interface MembershipListProps {
 }
 
 export function MembershipList({ memberships, locked = false }: MembershipListProps) {
-  return <section className="lamu-account-card" aria-labelledby="memberships-heading">
+  return <section className="lamu-account-card lamu-account-memberships" aria-labelledby="memberships-heading">
     <div className="lamu-account-orgHeader">
       <h2 id="memberships-heading">{copy.organizations}</h2>
       <Link href="/organizations" prefetch={false} className="lamu-account-viewAll" aria-disabled={locked || undefined} tabIndex={locked ? -1 : undefined}>{copy.viewAll}<AccountIcon name="chevron" size={14} /></Link>

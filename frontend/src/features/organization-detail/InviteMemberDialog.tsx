@@ -1,22 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Button, Field } from "@/components/ui";
+import { Field, focusField } from "@/components/ui";
 import { DetailDialog } from "./DetailDialog";
-import { RoleSelection } from "./RoleSelection";
+import { DetailOperationStatus, type DetailOperationFeedback } from "./DetailOperationStatus";
+import { RoleSelection, type OrgRoleCode } from "./RoleSelection";
 import { detailCopy as copy, type DetailDialogPhase } from "./detailData";
 
-interface InviteMemberDialogProps { readonly phase?: DetailDialogPhase; readonly onClose: () => void; }
+interface InviteMemberDialogProps extends DetailOperationFeedback {
+  readonly phase?: DetailDialogPhase;
+  readonly onClose: () => void;
+  readonly onSubmit?: (email: string, roles: readonly OrgRoleCode[]) => void;
+}
 
-export function InviteMemberDialog({ phase = "normal", onClose }: InviteMemberDialogProps) {
+const emailField = "org-detail-invite-email";
+
+export function InviteMemberDialog({ phase = "normal", busy, unknown = phase === "unknown", error, onClose, onSubmit, onRetry }: InviteMemberDialogProps) {
   const [email, setEmail] = useState(phase === "recipient_error" ? "mai.tran@example.test" : "");
-  const [roles, setRoles] = useState<readonly string[]>([]);
-  const pending = phase === "submitting";
-  return <DetailDialog title={copy.invite} description={copy.inviteDescription} submitLabel={copy.createInvitation} pending={pending} onClose={onClose}>
-    {phase === "recipient_error" && <Banner kind="error">{copy.recipientError}</Banner>}
-    {phase === "unknown" && <Banner kind="warn">{copy.unknown}<div style={{ marginTop: 8 }}><Button size="sm" aria-disabled="true">{copy.check}</Button></div></Banner>}
-    <Field name="org-detail-invite-email" label={copy.email} type="email" required requiredMark maxLength={254} autoComplete="off" placeholder={copy.emailPlaceholder} value={email} onChange={setEmail} disabled={pending} readOnly={phase === "unknown"} error={phase === "inline_error" ? copy.emailError : undefined} />
-    <RoleSelection value={roles} onChange={setRoles} disabled={pending || phase === "unknown"} invite />
+  const [roles, setRoles] = useState<readonly OrgRoleCode[]>([]);
+  const [invalidEmail, setInvalidEmail] = useState(phase === "inline_error");
+  const pending = busy || phase === "submitting";
+  function submit() {
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || normalized.length > 254) {
+      setInvalidEmail(true);
+      focusField(emailField);
+      return;
+    }
+    onSubmit?.(normalized, roles);
+  }
+  return <DetailDialog title={copy.invite} description={copy.inviteDescription} submitLabel={copy.createInvitation} pending={pending} disableSubmit={unknown} onClose={onClose} onSubmit={onSubmit && submit}>
+    <DetailOperationStatus error={error ?? (phase === "recipient_error" ? copy.recipientError : undefined)} unknown={unknown} onRetry={onRetry} />
+    <Field name={emailField} label={copy.email} type="email" required requiredMark maxLength={254} autoComplete="off" placeholder={copy.emailPlaceholder} value={email} onChange={(value) => { setEmail(value); setInvalidEmail(false); }} disabled={pending} readOnly={unknown} error={invalidEmail ? copy.emailError : undefined} />
+    <RoleSelection value={roles} onChange={setRoles} disabled={pending || unknown} invite />
     <p style={{ margin: 0, background: "var(--surface-2)", padding: 12, borderRadius: 12, fontSize: 12, color: "var(--text-soft)", lineHeight: 1.6 }}>{copy.inAppNote}</p>
   </DetailDialog>;
 }

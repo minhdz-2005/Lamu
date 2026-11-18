@@ -53,12 +53,12 @@ export function EventDetailPage({ slug, degradedParam }: { slug: string; degrade
   const [data, setData] = useState<EventDetailsComposition | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string } | null>(null);
 
   const [cart, setCart] = useState<Cart>({});
   const [phase, setPhase] = useState<BookingPhase>({ kind: "cart" });
   const [submitting, setSubmitting] = useState(false);
-  const [bookingError, setBookingError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [bookingError, setBookingError] = useState<{ message: string } | null>(null);
   const [authed, setAuthed] = useState(false);
 
   const keyRef = useRef<string | null>(null);
@@ -291,7 +291,7 @@ export function EventDetailPage({ slug, degradedParam }: { slug: string; degrade
         if (err.code === "SALES_CLOSED") await loadComposition(true);
       } else {
         // 03 §4: 5xx/mất mạng -> giữ nguyên cart và key để bấm Thử lại.
-        setBookingError({ message: "Chưa gửi được yêu cầu, thử lại.", requestId: described.requestId });
+        setBookingError({ message: "Chưa gửi được yêu cầu, thử lại." });
       }
     } finally {
       setSubmitting(false);
@@ -362,7 +362,7 @@ export function EventDetailPage({ slug, degradedParam }: { slug: string; degrade
   }
 
   if (error && !data) {
-    return <ErrorState message={error.message} requestId={error.requestId} onRetry={() => void loadComposition()} />;
+    return <ErrorState message={error.message} onRetry={() => void loadComposition()} />;
   }
 
   const event = data?.event ?? null;

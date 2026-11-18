@@ -34,6 +34,7 @@ export class UsersService {
         organization_id: m.organization_id,
         name: m.organization.name,
         slug: m.organization.slug,
+        description: m.organization.description,
         cover: mediaDisplay(
           m.organization.cover_asset,
           m.organization.cover_revision,

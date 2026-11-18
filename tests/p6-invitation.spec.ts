@@ -24,6 +24,222 @@ describe("P6 invitation real API and PostgreSQL", () => {
       .get("/users/me/invitations" + query)
       .set("X-User-Id", actor)
       .set("X-Session-Id", actor);
+  const outgoing = (actor: string, org: string, query = "") =>
+    request(p.identity.getHttpServer())
+      .get(`/organizations/${org}/members/invitations${query}`)
+      .set("X-User-Id", actor)
+      .set("X-Session-Id", actor);
+
+  it("lists only the organization's invitations for current active owners", async () => {
+    const f = await fixture(p);
+    const another = await fixture(p);
+    const route = `/organizations/${f.org}/members/invitations`;
+    const createMembership = async (user: string, role?: "OWNER" | "ADMIN") => {
+      const membership = await p.db.membership.create({
+        data: { user_id: user, organization_id: f.org },
+      });
+      if (role) {
+        const reference = await p.db.role.findFirstOrThrow({
+          where: { code: role, scope: "ORG", organization_id: null },
+        });
+        await p.db.membershipRole.create({
+          data: {
+            membership_id: membership.id,
+            role_id: reference.id,
+            resource_type: "ORG",
+          },
+        });
+      }
+      return membership;
+    };
+    const secondOwner = await createMembership(f.other.id, "OWNER");
+    await createMembership(another.other.id, "ADMIN");
+    await createMembership(another.recipient.id);
+
+    expect((await outgoing(f.owner.id, f.org).expect(200)).body).toEqual({
+      items: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    });
+    await another.invite().expect(201);
+    const first = (await f.invite().expect(201)).body;
+    const second = (
+      await f
+        .post(f.other.id, route, {
+          email: another.owner.email,
+          roles: [],
+        })
+        .expect(201)
+    ).body;
+    await p.db.user.update({
+      where: { id: f.recipient.id },
+      data: { display_name: "Updated recipient" },
+    });
+
+    const actual = [first.invitation_id, second.invitation_id].sort().reverse();
+    const defaultPage = await outgoing(f.owner.id, f.org)
+      .expect("Cache-Control", "no-store")
+      .expect(200);
+    contract("OrganizationInvitations", defaultPage.body);
+    expect(
+      defaultPage.body.items.map((item: { id: string }) => item.id),
+    ).toEqual(actual);
+    expect(defaultPage.body.items).toContainEqual({
+      id: first.invitation_id,
+      organization_id: f.org,
+      inviter_user_id: f.owner.id,
+      invitee_user_id: f.recipient.id,
+      invitee_display_name: "Updated recipient",
+      invitee_email: f.recipient.email,
+      roles: [orgRole(f.org)],
+      status: "PENDING",
+      created_at: new Date(now).toISOString(),
+      expires_at: first.expires_at,
+      processed_at: null,
+    });
+    const page = await outgoing(f.other.id, f.org, "?limit=1&offset=1").expect(
+      200,
+    );
+    contract("OrganizationInvitations", page.body);
+    expect(page.body).toMatchObject({
+      items: [{ id: actual[1] }],
+      total: 2,
+      limit: 1,
+      offset: 1,
+    });
+    expect(
+      (await outgoing(f.owner.id, f.org, "?offset=2").expect(200)).body,
+    ).toMatchObject({
+      total: 2,
+      items: [],
+    });
+    await f
+      .post(f.other.id, route + "/" + first.invitation_id + "/revoke")
+      .expect(200);
+    await f
+      .action(another.owner.id, second.invitation_id, "decline")
+      .expect(200);
+    const revoked = await outgoing(f.owner.id, f.org).expect(200);
+    expect(revoked.body.items).toContainEqual(
+      expect.objectContaining({
+        id: first.invitation_id,
+        status: "REVOKED",
+        processed_at: new Date(now).toISOString(),
+      }),
+    );
+    expect(revoked.body.items).toContainEqual(
+      expect.objectContaining({ id: second.invitation_id, status: "DECLINED" }),
+    );
+    const recipientInbox = await inbox(f.recipient.id).expect(200);
+    contract("Invitations", recipientInbox.body);
+    expect(recipientInbox.body.items[0]).toMatchObject({
+      id: first.invitation_id,
+      status: "REVOKED",
+    });
+    expect(recipientInbox.body.items[0]).not.toHaveProperty("invitee_email");
+
+    for (const actor of [
+      f.recipient.id,
+      another.owner.id,
+      another.other.id,
+      another.recipient.id,
+    ])
+      code(await outgoing(actor, f.org), 403, "FORBIDDEN");
+    code(await outgoing(f.owner.id, another.org), 403, "FORBIDDEN");
+    await p.db.membership.update({
+      where: { id: secondOwner.id },
+      data: { status: "INACTIVE" },
+    });
+    code(await outgoing(f.other.id, f.org), 403, "FORBIDDEN");
+    await p.db.user.update({
+      where: { id: f.owner.id },
+      data: { status: "LOCKED" },
+    });
+    code(await outgoing(f.owner.id, f.org), 403, "FORBIDDEN");
+    code(await outgoing(another.owner.id, randomUUID()), 404, "NOT_FOUND");
+    code(await outgoing(another.owner.id, "bad-id"), 400, "VALIDATION_FAILED");
+    for (const query of [
+      "?limit=101",
+      "?limit=1&limit=2",
+      "?offset=-1",
+      "?status=PENDING",
+    ])
+      code(
+        await outgoing(another.owner.id, another.org, query),
+        400,
+        "VALIDATION_FAILED",
+      );
+  });
+
+  it("computes effective outgoing expiry and preserves EVENT role snapshots without writes", async () => {
+    const f = await fixture(p);
+    const created = (await f.invite().expect(201)).body;
+    const role = {
+      code: "SPEAKER",
+      resource_type: "EVENT",
+      resource_id: randomUUID(),
+    };
+    const before = await p.db.organizationInvitation.update({
+      where: { id: created.invitation_id },
+      data: {
+        roles: [role],
+        created_at: new Date(now - 7 * 86400000),
+        expires_at: new Date(now),
+      },
+    });
+    const page = await outgoing(f.owner.id, f.org).expect(200);
+    contract("OrganizationInvitations", page.body);
+    expect(page.body.items).toEqual([
+      expect.objectContaining({
+        id: created.invitation_id,
+        roles: [role],
+        status: "EXPIRED",
+        processed_at: new Date(now).toISOString(),
+      }),
+    ]);
+    expect(
+      await p.db.organizationInvitation.findUniqueOrThrow({
+        where: { id: created.invitation_id },
+      }),
+    ).toEqual(before);
+  });
+
+  it("uses the organization sort index for a representative outgoing page", async () => {
+    const target = await fixture(p);
+    const bulk = await fixture(p);
+    const client = await sql.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO organization_invitations (
+          id, organization_id, inviter_user_id, invitee_user_id, roles,
+          status, created_at, expires_at, processed_at
+        )
+        SELECT gen_random_uuid(), organization_id::uuid, $3, $4, '[]',
+          'EXPIRED', created, created + interval '7 days', created + interval '7 days'
+        FROM (VALUES ($1, 120), ($2, 20000)) AS organizations(organization_id, amount)
+        CROSS JOIN LATERAL generate_series(1, amount) AS entries(i)
+        CROSS JOIN LATERAL (SELECT now() - i * interval '1 day' AS created) AS dates`,
+        [target.org, bulk.org, target.owner.id, target.recipient.id],
+      );
+      await client.query("ANALYZE organization_invitations");
+      const result = await client.query(
+        `EXPLAIN (COSTS OFF) SELECT *
+          FROM organization_invitations
+          WHERE organization_id=$1
+          ORDER BY created_at DESC, id DESC
+          LIMIT 20 OFFSET 20`,
+        [target.org],
+      );
+      expect(result.rows.map((row) => row["QUERY PLAN"]).join("\n")).toContain(
+        "Index Scan using organization_invitations_outgoing_idx",
+      );
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
   it("has additive FK/partial uniqueness/lifecycle constraints", async () => {
     const f = await fixture(p);
     const x = await f.invite().expect(201);
@@ -89,6 +305,32 @@ describe("P6 invitation real API and PostgreSQL", () => {
         .expect(201)
     ).body;
     contract("InvitationCreated", invite);
+    const sentPath = `/api/organizations/${org}/members/invitations`;
+    await g().get(sentPath).expect(401);
+    const owner = await p.db.user.findUniqueOrThrow({
+      where: { email: a.email },
+    });
+    const ownerSession = await p.db.refreshSession.findFirstOrThrow({
+      where: { user_id: owner.id },
+    });
+    await g()
+      .get(sentPath)
+      .set("Authorization", "Bearer " + bt)
+      .set("X-User-Id", owner.id)
+      .set("X-Session-Id", ownerSession.id)
+      .expect(403);
+    const sent = await g()
+      .get(sentPath + "?limit=1&offset=0")
+      .set("Authorization", "Bearer " + at)
+      .expect("Cache-Control", "no-store")
+      .expect(200);
+    contract("OrganizationInvitations", sent.body);
+    expect(sent.body).toMatchObject({
+      items: [{ id: invite.invitation_id, invitee_email: b.email }],
+      total: 1,
+      limit: 1,
+      offset: 0,
+    });
     const list = await g()
       .get("/api/users/me/invitations")
       .set("Authorization", "Bearer " + bt)
@@ -105,6 +347,14 @@ describe("P6 invitation real API and PostgreSQL", () => {
     const accepted = await accept().expect(200);
     contract("InvitationAccepted", accepted.body);
     expect((await accept().expect(200)).body).toEqual(accepted.body);
+    const sentAfterAccept = await g()
+      .get(sentPath)
+      .set("Authorization", "Bearer " + at)
+      .expect(200);
+    expect(sentAfterAccept.body.items[0]).toMatchObject({
+      id: invite.invitation_id,
+      status: "ACCEPTED",
+    });
     expect(
       (
         await g()
@@ -119,6 +369,12 @@ describe("P6 invitation real API and PostgreSQL", () => {
     );
     const docs = await g().get("/docs-json").expect(200);
     expect(docs.body.paths["/api/users/me/invitations"]).toBeDefined();
+    expect(
+      docs.body.paths["/api/organizations/{orgId}/members/invitations"].get,
+    ).toMatchObject({
+      operationId: "listOrganizationInvitations",
+      security: [{ bearerAuth: [] }],
+    });
     expect(
       Object.keys(docs.body.paths).some((x) => x.includes("/internal/")),
     ).toBe(false);

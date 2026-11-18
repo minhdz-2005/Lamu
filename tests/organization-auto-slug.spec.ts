@@ -2,7 +2,7 @@ import request from "supertest";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import Ajv from "ajv";
-import { pair, registration } from "./helpers";
+import { contract, pair, registration } from "./helpers";
 
 describe("Organization slug generated from name", () => {
   let p: Awaited<ReturnType<typeof pair>>, token: string, actor: string;
@@ -169,5 +169,129 @@ describe("Organization slug generated from name", () => {
       { name: "Valid", slug: "invalid slug" },
     ])
       expect((await create(body)).status).toBe(400);
+  });
+  it("replays the legacy no-description hash for missing, null and blank values", async () => {
+    const name = "Description legacy",
+      key = randomUUID();
+    const made = await create({ name }, key).expect(201);
+    for (const description of [null, "  \n\t "])
+      expect(
+        (await create({ name, description }, key).expect(201)).body,
+      ).toEqual(made.body);
+    expect((await get(made.body.organization_id)).body.description).toBeNull();
+    const record = await p.db.idempotencyRecord.findFirstOrThrow({
+      where: { actor_user_id: actor, idempotency_key: key },
+    });
+    expect(record.request_hash).toBe(
+      createHash("sha256")
+        .update(
+          JSON.stringify({
+            method: "POST",
+            operation: "CREATE_ORGANIZATION",
+            org: null,
+            user: null,
+            body: { name, slug: null },
+          }),
+        )
+        .digest("hex"),
+    );
+    await create({ name, description: "new content" }, key).expect(409);
+  });
+  it("normalizes description before hashing and validates exact Unicode code points", async () => {
+    const name = "Description Unicode",
+      key = randomUUID();
+    const description = "🎉".repeat(997) + "\né!";
+    const made = await create(
+      { name, description: " " + description + "\t" },
+      key,
+    ).expect(201);
+    expect((await create({ name, description }, key).expect(201)).body).toEqual(
+      made.body,
+    );
+    await create({ name, description: description.slice(0, -1) }, key).expect(
+      409,
+    );
+    await create({ name, description: description + "!" }).expect(400);
+    await create({ name, description: 123 }).expect(400);
+    const detail = (await get(made.body.organization_id)).body;
+    contract("Organization", detail);
+    expect(detail.description).toBe(description);
+    const profile = (
+      await request(p.gateway.getHttpServer())
+        .get("/api/users/me")
+        .auth(token, { type: "bearer" })
+        .expect(200)
+    ).body;
+    contract("Profile", profile);
+    expect(
+      profile.memberships.find(
+        (row: { organization_id: string }) => row.organization_id === detail.id,
+      )?.description,
+    ).toBe(description);
+  });
+  it("PATCH requires description and authorizes OWNER and ADMIN only in the target organization", async () => {
+    const { organization_id: org } = (
+      await create({ name: "Description rights" }).expect(201)
+    ).body;
+    const patch = (body: object, access = token) =>
+      request(p.gateway.getHttpServer())
+        .patch("/api/organizations/" + org)
+        .auth(access, { type: "bearer" })
+        .send(body);
+    for (const body of [
+      {},
+      { description: 7 },
+      { description: [] },
+      { description: "x".repeat(1001) },
+    ])
+      await patch(body).expect(400);
+    const ownerResult = await patch({
+      description: "  OWNER\nupdate  ",
+    }).expect(200);
+    contract("OrganizationDescriptionResult", ownerResult.body);
+    expect(ownerResult.body).toEqual({ description: "OWNER\nupdate" });
+
+    const input = registration();
+    const api = () => request(p.gateway.getHttpServer());
+    const { user_id: other } = (
+      await api().post("/api/auth/register").send(input).expect(200)
+    ).body;
+    const { access_token: access } = (
+      await api()
+        .post("/api/auth/login")
+        .send({ email: input.email, password: input.password })
+        .expect(200)
+    ).body;
+    await create({ name: "Managed elsewhere" }, randomUUID(), access).expect(
+      201,
+    );
+    await patch({ description: "wrong organization" }, access).expect(403);
+    const membership = await p.db.membership.create({
+      data: { organization_id: org, user_id: other },
+    });
+    await patch({ description: "ordinary member" }, access).expect(403);
+    expect((await get(org, access)).body.description).toBe("OWNER\nupdate");
+
+    const admin = await p.db.role.findFirstOrThrow({
+      where: { code: "ADMIN", scope: "ORG", organization_id: null },
+    });
+    await p.db.membershipRole.create({
+      data: {
+        membership_id: membership.id,
+        role_id: admin.id,
+        resource_type: "ORG",
+      },
+    });
+    expect(
+      (await patch({ description: "ADMIN update" }, access).expect(200)).body,
+    ).toEqual({ description: "ADMIN update" });
+    expect(
+      (await patch({ description: null }, access).expect(200)).body,
+    ).toEqual({ description: null });
+    await patch({ description: "reset" }).expect(200);
+    expect(
+      (await patch({ description: "  \t\n" }, access).expect(200)).body,
+    ).toEqual({ description: null });
+    expect((await get(org)).body.description).toBeNull();
   });
 });

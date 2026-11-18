@@ -1,6 +1,6 @@
 import { transactionRetry } from "../common/transaction";
 import { Inject, Injectable } from "@nestjs/common";
-import { createHmac, randomInt, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { hash } from "argon2";
 import { fail } from "@lamu/runtime";
 import { DATABASE, type Database } from "../database";
@@ -12,6 +12,8 @@ import {
 } from "../modules/auth/auth.service";
 import { SECURITY_CONFIG, type RecoveryConfig } from "./config";
 import { equalDigest, otpDigest, seal } from "./crypto";
+import { consumeSecurityAttempt } from "./rate-bucket";
+import { replacePassword } from "./password-state";
 type Tx = Prisma.TransactionClient;
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 @Injectable()
@@ -20,25 +22,22 @@ export class RecoveryService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(SECURITY_CONFIG) private readonly config: RecoveryConfig,
   ) {}
-  private bucketKey(scope: string, value: string, window: number) {
-    return createHmac("sha256", Buffer.from(this.config.hmac, "hex"))
-      .update(scope + ":" + value + ":" + window)
-      .digest("hex");
-  }
   private async bucket(
     tx: Tx,
     scope: string,
     value: string,
     limit: number,
-    seconds = 3600,
+    seconds?: number,
   ) {
-    const window = Math.floor(Date.now() / (seconds * 1000)),
-      key = this.bucketKey(scope, value, window),
-      expires = new Date((window + 1) * seconds * 1000);
-    const rows = await tx.$queryRaw<
-      Array<{ count: number }>
-    >`INSERT INTO security_rate_buckets(key,count,expires_at) VALUES(${key},1,${expires}) ON CONFLICT(key) DO UPDATE SET count=LEAST(security_rate_buckets.count+1,1000000) RETURNING count`;
-    return rows[0].count <= limit;
+    const { allowed } = await consumeSecurityAttempt(
+      tx,
+      Buffer.from(this.config.hmac, "hex"),
+      scope,
+      value,
+      limit,
+      seconds,
+    );
+    return allowed;
   }
   async mail(
     tx: Tx,
@@ -218,18 +217,7 @@ export class RecoveryService {
           "INVALID_RECOVERY",
           "Invalid or expired recovery credentials",
         );
-      await tx.user.update({
-        where: { id: c.user_id },
-        data: { password_hash },
-      });
-      await tx.refreshSession.updateMany({
-        where: { user_id: c.user_id, revoked_at: null },
-        data: { revoked_at: at },
-      });
-      await tx.passwordResetChallenge.updateMany({
-        where: { user_id: c.user_id, consumed_at: null },
-        data: { consumed_at: at },
-      });
+      await replacePassword(tx, c.user_id, password_hash, at);
       await this.mail(
         tx,
         "PASSWORD_CHANGED",

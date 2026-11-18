@@ -30,7 +30,7 @@ export interface BookingView {
   cart: Record<string, number>;
   phase: BookingPhase;
   submitting: boolean;
-  error: { message: string; requestId?: string } | null;
+  error: { message: string } | null;
   disabled: BookingDisabled | null;
   draftTotal: string;
   onQtyChange: (ticketTypeId: string, next: number) => void;
@@ -148,7 +148,7 @@ export function BookingPanel(view: BookingView) {
   const action = (
     <div className="card no-print" style={{ marginTop: 14 }}>
       {view.error && (
-        <Banner kind="error" requestId={view.error.requestId}>
+        <Banner kind="error">
           {view.error.message}
         </Banner>
       )}

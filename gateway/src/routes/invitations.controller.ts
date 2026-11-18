@@ -28,6 +28,24 @@ export class InvitationsController {
       r.identity,
     );
   }
+  @Get("organizations/:orgId/members/invitations")
+  listSent(
+    @Param("orgId") org: string,
+    @Req() r: VerifiedRequest,
+    @Res() s: Response,
+  ) {
+    const queryAt = r.originalUrl.indexOf("?");
+    const query = queryAt < 0 ? "" : r.originalUrl.slice(queryAt);
+    return this.proxy.forward(
+      "/organizations/" +
+        encodeURIComponent(org) +
+        "/members/invitations" +
+        query,
+      r,
+      s,
+      r.identity,
+    );
+  }
   @Post("organizations/:orgId/members/invitations") create(
     @Param("orgId") org: string,
     @Req() r: VerifiedRequest,

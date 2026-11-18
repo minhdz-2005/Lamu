@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Req,
@@ -22,6 +23,20 @@ export class OrganizationsController {
     @Param("orgId") org: string,
     @Req() req: VerifiedRequest,
     @Res() res: Response,
+  ) {
+    return this.forwardOrganization(org, req, res);
+  }
+  @Patch(":orgId") updateDescription(
+    @Param("orgId") org: string,
+    @Req() req: VerifiedRequest,
+    @Res() res: Response,
+  ) {
+    return this.forwardOrganization(org, req, res);
+  }
+  private forwardOrganization(
+    org: string,
+    req: VerifiedRequest,
+    res: Response,
   ) {
     return this.proxy.forward(
       "/organizations/" + encodeURIComponent(org),

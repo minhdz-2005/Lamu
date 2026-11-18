@@ -1,5 +1,7 @@
 # Theo dõi bàn giao Identity và Gateway cho các service
 
+Cập nhật 18/11/2026: HTTP Identity/Gateway 1.5.0 thêm `GET /organizations/{orgId}/members/invitations` (Gateway thêm `/api`). Chỉ OWNER ACTIVE trong org đọc tên/email hiện tại của người nhận; phân trang bằng `limit`, `offset`, trả `Cache-Control: no-store`. Session local dùng Next same-origin, localStorage theo namespace và Web Locks. Chi tiết triển khai xem [báo cáo Identity Pages](../../services/identity-service/report/REPORT_FRONTEND_IDENTITY_PAGES_INTEGRATION_02.md).
+
 Cập nhật 15/11/2026: HTTP Identity/Gateway hiện tại1.3.0, CreateOrganization chỉ bắt buộc name, slug input tùy chọn; Identity tự sinh và xử lý collision, explicit slug vẫn tương thích1.2.0. Nguồn: ADR0006/canonical/[evidence](../../services/identity-service/report/REPORT_ORGANIZATION_AUTO_SLUG_01.md). Mapping P8 ghi1.2.0 bên dưới là baseline trước thay đổi này. Frontend có thể bỏ field slug khỏi request; không dùng generated slug làm input hash idempotency, giữ nguyên key/body khi retry.
 
 Ngày khởi tạo: 13/11/2026 (Asia/Saigon). Nguồn: [kế hoạch Identity/Gateway](../../services/identity-service/MASTER_PLAN.md), [review F13](../../services/identity-service/report/REVIEW_MASTER_PLAN01.md).

@@ -2,9 +2,11 @@
 
 import { detailCopy as copy } from "./detailData";
 
+export type OrgRoleCode = "OWNER" | "ADMIN";
+
 interface RoleSelectionProps {
-  readonly value: readonly string[];
-  readonly onChange: (roles: readonly string[]) => void;
+  readonly value: readonly OrgRoleCode[];
+  readonly onChange: (roles: readonly OrgRoleCode[]) => void;
   readonly disabled?: boolean;
   readonly invite?: boolean;
 }

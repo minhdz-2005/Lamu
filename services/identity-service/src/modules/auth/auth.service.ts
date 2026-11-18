@@ -5,7 +5,9 @@ import { hash, verify, argon2id } from "argon2";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { sign } from "jsonwebtoken";
 import { type Database, DATABASE } from "../../database";
-import { RegisterDto, LoginDto } from "./dto/auth.dto";
+import { RegisterDto, LoginDto, ChangePasswordDto } from "./dto/auth.dto";
+import { replacePassword } from "../../security/password-state";
+import { consumeSecurityAttempt } from "../../security/rate-bucket";
 import type { components } from "../../../../../shared/contracts/http/generated/identity";
 export const AUTH_CONFIG = Symbol("AUTH_CONFIG");
 export const CLOCK = Symbol("CLOCK");
@@ -19,6 +21,7 @@ export const hashOptions = {
 export const tokenHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export const refreshToken = () => randomBytes(32).toString("base64url");
+export const passwordAttemptWindow = 900;
 @Injectable()
 export class AuthService {
   private readonly dummyHash = hash(randomBytes(32), hashOptions);
@@ -102,6 +105,49 @@ export class AuthService {
       });
     });
     return this.tokens(user.id, session.id, token, at);
+  }
+  async changePassword(
+    identity: { sub: string; sid: string },
+    dto: ChangePasswordDto,
+  ): Promise<components["schemas"]["PasswordChanged"]> {
+    const { allowed } = await transactionRetry(this.db, (tx) =>
+      consumeSecurityAttempt(
+        tx,
+        this.config.secret,
+        "change-password-user",
+        identity.sub,
+        5,
+        passwordAttemptWindow,
+      ),
+    );
+    if (!allowed)
+      fail(429, "RATE_LIMITED", "Too many password change attempts");
+    const user = await this.db.user.findUnique({ where: { id: identity.sub } });
+    if (!user || user.status !== "ACTIVE")
+      fail(403, "FORBIDDEN", "Account unavailable");
+    if (!(await verify(user.password_hash, dto.current_password)))
+      fail(400, "CURRENT_PASSWORD_INCORRECT", "Current password is incorrect");
+    const passwordHash = await hash(dto.new_password, hashOptions);
+    await transactionRetry(this.db, async (tx) => {
+      const [locked] = await tx.$queryRaw<
+        Array<{ password_hash: string; status: string }>
+      >`SELECT password_hash,status FROM users WHERE id=${identity.sub}::uuid FOR UPDATE`;
+      if (!locked || locked.status !== "ACTIVE")
+        fail(403, "FORBIDDEN", "Account unavailable");
+      const [session] = await tx.$queryRaw<
+        Array<{ revoked_at: Date | null; expires_at: Date }>
+      >`SELECT revoked_at,expires_at FROM refresh_sessions WHERE id=${identity.sid}::uuid AND user_id=${identity.sub}::uuid FOR UPDATE`;
+      const at = this.now();
+      if (
+        !session ||
+        session.revoked_at ||
+        session.expires_at <= at ||
+        locked.password_hash !== user.password_hash
+      )
+        fail(401, "UNAUTHENTICATED", "Session unavailable");
+      await replacePassword(tx, identity.sub, passwordHash, at);
+    });
+    return { status: "OK" };
   }
   async refresh(token: string): Promise<components["schemas"]["Tokens"]> {
     const found = await this.db.refreshSession.findUnique({

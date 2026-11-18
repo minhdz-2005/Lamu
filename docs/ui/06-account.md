@@ -2,9 +2,9 @@
 
 **Route:** `/me` · **Cần đăng nhập:** Bắt buộc · **Ưu tiên:** M4 Identity — 2 (sau auth) · **API:** `GET /api/users/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`
 
-Mục tiêu: có trang đích sau đăng nhập chỉ phụ thuộc Gateway/Identity, xem hồ sơ và chuyển đến tổ chức/lời mời. **Trạng thái: thiết kế M4, chưa triển khai/chưa nghiệm thu browser thật.** Số 06 tiếp nối bộ tài liệu cũ, không phải thứ tự triển khai.
+Mục tiêu: có trang đích sau đăng nhập chỉ phụ thuộc Gateway/Identity, xem hồ sơ và chuyển đến tổ chức/lời mời. **Trạng thái: đã nối Identity API ở local.** Số 06 tiếp nối bộ tài liệu cũ, không phải thứ tự triển khai.
 
-Authority: [Identity OpenAPI v1.2.0](../../shared/contracts/http/identity.openapi.json), schema `Profile`, `Tokens`, `LoggedOut`; [quy ước chung](00-conventions.md). Không thêm API sửa hồ sơ, đổi mật khẩu hoặc quản lý các thiết bị.
+Authority: [Identity OpenAPI v1.5.0](../../shared/contracts/http/identity.openapi.json), schema `Profile`, `Tokens`, `LoggedOut`; [quy ước chung](00-conventions.md). Không thêm API sửa hồ sơ, đổi mật khẩu hoặc quản lý các thiết bị.
 
 ## 1. Layout
 
@@ -34,7 +34,7 @@ Màn hình dùng chung header với 07–09. Mobile: hồ sơ và tổ chức th
 | `ProfileSummary` | `profile` | chỉ đọc `display_name`, `email`; không có nút lưu |
 | `MembershipList` | `memberships`, `onOpen` | name/slug/roles từ Profile, ID dùng cho điều hướng |
 | `IdentityHeader` | `profile`, `logoutState`, `onLogout` | menu chung; không gọi API service khác |
-| `SessionNotice` | `kind`, `requestId` | hết phiên, mất kết nối, logout chưa xác nhận |
+| `SessionNotice` | `kind`, `title` | hết phiên, mất kết nối, logout chưa xác nhận |
 
 ## 2. Trường và validate
 
@@ -76,7 +76,7 @@ Mở tổ chức → `/organizations/{organization_id}`; Xem tất cả → `/or
 | Loading | bootstrap/load chưa xong | skeleton hồ sơ và danh sách; chưa gọi user là “Khách” |
 | Empty memberships | Profile hợp lệ, không tổ chức | vẫn hiện hồ sơ; CTA tạo tổ chức/lời mời |
 | Success | Profile hợp lệ | thông tin chỉ đọc và link theo membership |
-| Error | load thất bại | banner an toàn + request_id nếu có + Tải lại; không in raw response |
+| Error | load thất bại | thông báo tiếng Việt và nút Tải lại khi phù hợp |
 | Logging out | logout đang chạy | khóa thao tác session mới, nút “Đang đăng xuất…” |
 
 ## 5. Edge cases phải xử lý
@@ -100,4 +100,5 @@ Mở tổ chức → `/organizations/{organization_id}`; Xem tất cả → `/or
 - [ ] Accept lời mời rồi refetch thấy tổ chức mới; không suy từ response client tự tạo.
 - [ ] Logout/đổi tài khoản khi profile đang chờ không làm lộ hoặc hồi sinh hồ sơ cũ.
 - [ ] Kiểm keyboard/focus, mobile, light/dark và reduced motion theo 00.
-- [ ] Khi thực sự chạy, tạo `docs/ui/reports/06-account.md`, ghi provider thật/môi trường/evidence; hiện browser integration **NOT RUN**.
+
+Kết quả kiểm chứng theo từng route ở [báo cáo UI local](reports/identity-pages-integration-02.md).

@@ -27,6 +27,6 @@ export function InvitationPagination({ total, limit, page, onLimit, onPage }: In
         <Button size="sm" disabled={end >= total} onClick={() => onPage(page + 1)}>{copy.next}</Button>
       </div>
     </div>
-    <style jsx>{`.inbox-pagination select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; } @media (max-width: 480px) { .inbox-pagination { align-items: flex-start; flex-direction: column; } }`}</style>
+    <style jsx>{`.inbox-pagination select:focus-visible { outline: 2px solid var(--secondary); outline-offset: 3px; } @media (max-width: 480px) { .inbox-pagination { align-items: flex-start; flex-direction: column; } }`}</style>
   </nav>;
 }

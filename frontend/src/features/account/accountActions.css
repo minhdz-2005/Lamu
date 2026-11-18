@@ -1,0 +1,84 @@
+.lamu-account-avatar {
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+}
+
+.lamu-account-avatar > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+button.lamu-account-avatarLarge {
+  position: relative;
+  overflow: visible;
+}
+
+.lamu-account-avatarCamera {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 2px solid var(--surface-card);
+  border-radius: 50%;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.lamu-account-password {
+  margin-top: 12px;
+}
+
+.lamu-account-avatarStatus:not(:empty),
+.lamu-account-password > p {
+  margin-top: 12px;
+}
+
+.lamu-account-password form {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.lamu-account-password label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.lamu-account-password input {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--field-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.lamu-account-password input:focus {
+  border-color: var(--secondary);
+}
+
+.lamu-account-password input[aria-invalid="true"] {
+  border-color: var(--danger-base);
+}
+
+.lamu-account-fieldError {
+  color: var(--danger-text);
+  padding-top: 6px;
+  font-size: 13px;
+}
+
+.lamu-account-passwordButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
