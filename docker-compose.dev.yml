@@ -1,0 +1,11 @@
+# Override CHỈ dành cho dev local: service chạy trên host, DB + broker chạy trong compose.
+# Không sửa docker-compose.yml gốc. Dùng:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d registration-db rabbitmq
+# Khi chạy trong Docker network (compose gốc), service trỏ registration-db:5432 / rabbitmq:5672.
+services:
+  registration-db:
+    ports:
+      - "5432:5432"
+  rabbitmq:
+    ports:
+      - "5672:5672"
