@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": [
+    "tests/**/*.ts",
+    "gateway/src/**/*.ts",
+    "services/identity-service/src/**/*.ts",
+    "shared/libraries/runtime/src/**/*.ts"
+  ]
+}

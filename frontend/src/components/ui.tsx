@@ -224,25 +224,22 @@ export function Chips({
 export function Banner({
   kind,
   children,
-  requestId,
 }: {
   kind: "error" | "warn" | "ok";
   children: ReactNode;
-  requestId?: string;
 }) {
   const role = kind === "error" ? "alert" : "status";
   return (
     <div className={cx("banner", `banner-${kind}`)} role={role}>
       {children}
-      {requestId && <span className="request-id mono">{requestId}</span>}
     </div>
   );
 }
 
-export function ErrorState({ message, requestId, onRetry }: { message: string; requestId?: string; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="stack">
-      <Banner kind="error" requestId={requestId}>
+      <Banner kind="error">
         {message}
       </Banner>
       {onRetry && (

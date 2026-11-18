@@ -1,0 +1,104 @@
+{
+  "recorded_at_utc": "2026-11-14T09:51:06.962Z",
+  "head_reference": "34bca2e95172afe0c7340da5bcac8be1c7dcffd1",
+  "working_tree": true,
+  "no_task_commits": true,
+  "http_contract_version": "1.1.0",
+  "event_schema_version": 1,
+  "validation": {
+    "full_test_command": "npm run test:m1",
+    "suites": 16,
+    "tests": 68,
+    "skipped": 0,
+    "duration_seconds": 27.155,
+    "coverage": {
+      "lines": {
+        "total": 596,
+        "covered": 586,
+        "skipped": 0,
+        "pct": 98.32
+      },
+      "statements": {
+        "total": 664,
+        "covered": 652,
+        "skipped": 0,
+        "pct": 98.19
+      },
+      "functions": {
+        "total": 130,
+        "covered": 130,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 407,
+        "covered": 370,
+        "skipped": 0,
+        "pct": 90.9
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": "Unknown"
+      }
+    },
+    "build_typecheck": "PASS",
+    "contracts_check": "PASS",
+    "format_check": "PASS",
+    "production_audit": "0 vulnerabilities",
+    "compose_p5": "M2_P5_COMPOSE_EVIDENCE_01.json"
+  },
+  "scope": {
+    "database": "real PostgreSQL 16.15 isolated test containers",
+    "org": "real NestJS Identity/Gateway API",
+    "event": "fixture resolver injected only by tests; no Event M4 provider",
+    "manual_swagger_DOC_01": "NOT RUN",
+    "P6": "NOT IMPLEMENTED",
+    "M3_worker": "NOT IMPLEMENTED"
+  },
+  "compose_model_note": "Compose passed before explicit onUpdate:NoAction Prisma model annotation aligning existing SQL; supported API code and migration SQL unchanged; client generation/build/typecheck revalidated afterward.",
+  "sha256": {
+    "docs/adr/0003-m2-p5-organization-rbac.md": "979e2538771579452f687e5feeb521146914af5b3f05cab83e6cb187f25e9e42",
+    "docs/adr/README.md": "c9ec78a001d73fb25dca94bde28fc983a63f50a5e6fa6961b98c6254de29f07c",
+    "docs/api/catalog.md": "90a708d05129567df906c69655c01746db8522c82ab22794c6f1587e3704c926",
+    "docs/architecture.md": "593fe57b9c8f9c9837ec1673314f79f6094f23644ba034d7f540632e08ecc252",
+    "docs/integration/identity-handoff.md": "87021e535970ebc5a780d9fe8960efbc3c9864070317429ffc54916c41d1b9ba",
+    "gateway/README.md": "66e6d5d69ed6c35d53787c7f3ab5f39bc7726fa917f9e97ff9a04eb63ba8f1ec",
+    "gateway/src/app.ts": "585f897cfedeab6f2a3b20058d840c00ecb56bdcf67d47b01624e93ceda8f03b",
+    "gateway/src/routes/organizations.controller.ts": "b397ec97f8771cbc3ec324c9e81d1376a934a5c1d041628db2ad415104ec4b73",
+    "gateway/src/routes/proxy.service.ts": "0601344a7a636fdded0fe10fe255e4c96d06d30dafcc37e40175e8e24452d084",
+    "jest.config.cjs": "d6dd965bc25f87676ba280bc4e710582983425498b81d98aadaed226caff6f45",
+    "package-lock.json": "6e00de8911a18ff2bbae347246980a6948e73abf810e323b7ec9b0cc1ee24e26",
+    "package.json": "743827f7da01ca1b216183fdb6f5c86c39cf83814dec7a79a7e0f6155dc903f4",
+    "scripts/compose-smoke.cjs": "080d727e7e1498432f00fa0f9ee4b2dd1f8dc7efc22f7faca2da3ddd5d5341c0",
+    "scripts/contract-projection.cjs": "c84774a4bd3c5bbdf0c8da7d83cde1160527f593ceebf749b7067cd1a73c984f",
+    "services/identity-service/README.md": "a00921f55f36e566dda3c264a91b32f348664ee45fcf681f009bb61d28ee545a",
+    "services/identity-service/prisma/migrations/202611140001_p5/migration.sql": "79926a9153e22a3963dad6fc9dfd2796cd54ad0786de4aff3f5df4e8f0a22a90",
+    "services/identity-service/prisma/migrations/202611140002_rbac_reference/migration.sql": "bf3e7a67dbd70eba9c1d019ba76ba5fc55a07654f043f592d90daa107ce5f142",
+    "services/identity-service/prisma/schema.prisma": "97cb3ff3ee57c2e9cd3a8a271b247719e16dcf75219234f9e834c0beeb1b4dfe",
+    "services/identity-service/src/app.ts": "260c289710a02585e898d7162f510b5dc81db490251d277a4b51e018292e8704",
+    "services/identity-service/src/modules/organizations/authorization.service.ts": "b1a476105f4cd0fb9b1e8871ae7e936504d987d0106ec94d54619fc6f4c48c4c",
+    "services/identity-service/src/modules/organizations/dto/organization.dto.ts": "0c4ef61287d335af13bba313e6b9361908e8cf24ac8382f5f6cbec18ca3c00dc",
+    "services/identity-service/src/modules/organizations/event-context.ts": "10b9f6905ec4e35109f6c71903186eb76f57e001ffaab94d959e1a33cf96c003",
+    "services/identity-service/src/modules/organizations/organizations.controller.ts": "f13037e87ae47564dcbde8f362308ef44a4a670ce5c0e7b485b9cdc1ccb0ecd9",
+    "services/identity-service/src/modules/organizations/organizations.module.ts": "a01648fc69160bbfc0713f8f6488e3531530441591f27e0e1fee7ebd7805025c",
+    "services/identity-service/src/modules/organizations/organizations.service.ts": "e1bb02eb3b7ea6cb96bc53e3df81af55659ba43f3bde32839f8e993c6b906923",
+    "shared/contracts/events/README.md": "533971d4362313a73ae12e4557f93e8e6d6d17e3bb06f1494c7f1695eebfad7f",
+    "shared/contracts/events/fixtures/membership-changed.v1.json": "cacbe6ed6c9653649cb040dbd12de138ef50cc7dcd687a766687cb0f5ff11e62",
+    "shared/contracts/events/fixtures/organization-created.v1.json": "731a9a283ecd51bb22644790d21bad0be65e4f05a3e7e5559c521df6347f1e60",
+    "shared/contracts/events/membership-changed.v1.schema.json": "5925f0571663884d3203418ce20bebb5eb25f15b3bab18843b99e42fbe9d46cd",
+    "shared/contracts/events/organization-created.v1.schema.json": "9e5b0ba70b246110b9adf1550c086cf1d7f7e4444ae80a102840e21945b19db2",
+    "shared/contracts/http/gateway.openapi.json": "0b152055d4e5841b1849159b754ed2a56ab390d9a0e4511b390b9fdd9b846b23",
+    "shared/contracts/http/generated/identity.d.ts": "d5222987f18d9d23252689cf892501b4b898093b4c38d8173583d99dd71f687c",
+    "shared/contracts/http/identity.openapi.json": "89d8f7038e215ab3c9ec8147355c4188dce9d8a66b971e4700a3509f81ba209b",
+    "tests/helpers.ts": "5c0a0194809c009cd25a595ad5b288a6667942b9d1b5713c51940fdb209a6c78",
+    "tests/p0-contract.spec.cjs": "41e75f1f2a7c7aeb6eb6149726f0426a6a30a419419c831068624a85a926ff7f",
+    "tests/p1-seed.spec.ts": "d2bb69854e7cb33e2f1ce12e863b765dff4ef8855e8e419a69021be7f3484d18",
+    "tests/p5-contract.spec.cjs": "c5ca632e04135951d411674e541ef63cd311c06fedd2e743b39eac66a0588092",
+    "tests/p5-organization.spec.ts": "b9b90439f2c6c80035ddf7c8ead0d1dc0694b67d0e3a84e6139cd01a5aa4cc91",
+    "tests/p5-transactions.spec.ts": "fd8d315809512196ffbdd17697ec291b1b5e00b0be2cb178964d3fdbc1e40e86",
+    "tests/p5-upgrade.spec.ts": "c71da80489dc5a3047edaf3d9bda3a0df521ed6e9f0ba90232ce7c4bb7847d64",
+    "tsconfig.base.json": "8ca866422066da6466298686c664ee47e380bfad5ca4e08025aac526ada842f8"
+  }
+}

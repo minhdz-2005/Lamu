@@ -18,7 +18,7 @@ interface Props {
   orgId: string;
   events: OrganizerEvent[];
   loading: boolean;
-  error: { message: string; requestId?: string } | null;
+  error: { message: string } | null;
   onRetry: () => void;
   rights: Set<Right>;
   status: string;
@@ -103,7 +103,7 @@ export function EventsTab({
         </div>
       </div>
 
-      {error && <ErrorBanner message={error.message} requestId={error.requestId} onRetry={onRetry} />}
+      {error && <ErrorBanner message={error.message} onRetry={onRetry} />}
 
       {loading ? (
         <div className="stack">
@@ -216,9 +216,9 @@ export function EventsTab({
   );
 }
 
-function ErrorBanner({ message, requestId, onRetry }: { message: string; requestId?: string; onRetry: () => void }) {
+function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Banner kind="error" requestId={requestId}>
+    <Banner kind="error">
       {message}{" "}
       <Button size="sm" onClick={onRetry}>
         Thử lại
@@ -240,7 +240,7 @@ function CreateEventModal({
   const [form, setForm] = useState<DraftForm>(defaultDraft);
   const [slugEdited, setSlugEdited] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof DraftForm, string>>>({});
-  const [failure, setFailure] = useState<{ message: string; requestId?: string } | null>(null);
+  const [failure, setFailure] = useState<{ message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const set = (key: keyof DraftForm) => (value: string) => {
@@ -318,7 +318,7 @@ function CreateEventModal({
         </>
       }
     >
-      {failure && <ErrorBanner message={failure.message} requestId={failure.requestId} onRetry={() => void submit()} />}
+      {failure && <ErrorBanner message={failure.message} onRetry={() => void submit()} />}
       <Field
         name="title"
         label="Tiêu đề"
@@ -413,7 +413,7 @@ function PublishDialog({
 }) {
   const [noTicketType, setNoTicketType] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<{ message: string; requestId?: string } | null>(null);
+  const [failure, setFailure] = useState<{ message: string } | null>(null);
   const [published, setPublished] = useState(false);
 
   // 05 §3.3 bước 2: kiểm tra kho vé trước, chỉ cảnh báo, API không chặn publish.
@@ -487,7 +487,7 @@ function PublishDialog({
               Chưa có loại vé. Khách vào sẽ thấy Hết vé cho tới khi bạn thêm vé.
             </Banner>
           )}
-          {failure && <ErrorBanner message={failure.message} requestId={failure.requestId} onRetry={() => void submit()} />}
+          {failure && <ErrorBanner message={failure.message} onRetry={() => void submit()} />}
         </div>
       )}
     </Modal>
@@ -507,7 +507,7 @@ function CancelDialog({
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | undefined>();
-  const [failure, setFailure] = useState<{ message: string; requestId?: string } | null>(null);
+  const [failure, setFailure] = useState<{ message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -575,7 +575,7 @@ function CancelDialog({
           <span className="muted small">{reason.length}/300</span>
         </div>
       </div>
-      {failure && <ErrorBanner message={failure.message} requestId={failure.requestId} onRetry={() => void submit()} />}
+      {failure && <ErrorBanner message={failure.message} onRetry={() => void submit()} />}
       <Badge tone="warn">Hành động này không hoàn tác được</Badge>
     </Modal>
   );

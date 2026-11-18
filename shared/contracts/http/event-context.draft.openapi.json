@@ -1,0 +1,135 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Event authorization context — D09/F05 DRAFT",
+    "version": "0.1.0-draft",
+    "description": "P8 proposal only, not accepted or implemented. Provider: Event; consumer: Identity EventContextResolver. Returns authoritative event/organization metadata including DRAFT events. Does not authorize the end user. Internal trusted local network only; deployment beyond local requires a separately approved service authentication scheme. No public Gateway route. Changes require Event/Identity owner review before M4 implementation."
+  },
+  "x-contract-status": "DRAFT",
+  "x-provider": "Event",
+  "x-consumer": "Identity",
+  "x-approval": "Required before provider/adapter implementation; no consumer acceptance recorded",
+  "x-compatibility": "Additive proposed internal API; Identity HTTP v1.2.0 and accepted P5 resolver interface unchanged. Breaking draft revisions require review and regeneration before adoption.",
+  "paths": {
+    "/internal/events/{eventId}/authorization-context": {
+      "get": {
+        "operationId": "resolveEventAuthorizationContext",
+        "description": "Read from Event-owned storage without calling Identity authorization/check. All existing DRAFT/PUBLISHED/CANCELLED events resolve; lifecycle eligibility is not asserted. No request body, idempotency key, end-user bearer token or client-supplied organization. Caller validates response UUIDs and requested event ID, compares organization, then rechecks current local authorization under Identity transaction locks. No cache, cross-database read, fixture fallback or distributed transaction.",
+        "security": [],
+        "x-trust-boundary": "Local internal network; security:[] does not authorize public exposure. Non-local service authentication remains undecided.",
+        "x-proposed-timeouts-ms": {
+          "per-call": 1000,
+          "per-command-resolution-budget": 2000
+        },
+        "x-proposed-retries": 0,
+        "x-proposed-error-mapping": {
+          "404": "404 NOT_FOUND at Identity; no mutation",
+          "organization-mismatch": "403 FORBIDDEN at Identity; no mutation",
+          "invalid-response-or-other-provider-error": "502 UPSTREAM_UNAVAILABLE at Identity; no mutation",
+          "timeout": "504 UPSTREAM_TIMEOUT at Identity; no mutation",
+          "missing-adapter": "Existing accepted runtime behavior: 409 EVENT_SCOPE_UNVERIFIED"
+        },
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Opaque UUID, normalized case-insensitively."
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "One UUID propagated for correlation, otherwise generate a UUID; never identity evidence."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing event, including DRAFT. Both UUIDs required and non-null; event_id equals requested eventId. Organization is owned by Event, never copied from caller input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventAuthorizationContext"
+                },
+                "examples": {
+                  "existingDraftEvent": {
+                    "summary": "Synthetic DRAFT event metadata; no status field is transmitted",
+                    "value": {
+                      "event_id": "10000000-0000-4000-8000-000000000001",
+                      "organization_id": "20000000-0000-4000-8000-000000000001"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: invalid path UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./identity.openapi.json#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: no existing event; tombstone/delete policy remains open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./identity.openapi.json#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED: caller fails closed, maps to upstream unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./identity.openapi.json#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: no storage/stack details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./identity.openapi.json#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SERVICE_UNAVAILABLE: Event storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./identity.openapi.json#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EventAuthorizationContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_id", "organization_id"],
+        "properties": {
+          "event_id": { "type": "string", "format": "uuid" },
+          "organization_id": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  }
+}

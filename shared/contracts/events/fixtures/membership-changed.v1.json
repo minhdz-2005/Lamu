@@ -1,0 +1,24 @@
+{
+  "event_id": "10000000-0000-4000-8000-000000000001",
+  "event_type": "MembershipChanged",
+  "version": 1,
+  "occurred_at": "2026-11-14T00:00:00Z",
+  "aggregate_type": "membership",
+  "aggregate_id": "20000000-0000-4000-8000-000000000001",
+  "producer": "identity-service",
+  "payload": {
+    "membership_id": "20000000-0000-4000-8000-000000000001",
+    "organization_id": "30000000-0000-4000-8000-000000000001",
+    "user_id": "40000000-0000-4000-8000-000000000001",
+    "status": "ACTIVE",
+    "membership_revision": 1,
+    "change_type": "CREATED",
+    "roles": [
+      {
+        "code": "OWNER",
+        "resource_type": "ORG",
+        "resource_id": "30000000-0000-4000-8000-000000000001"
+      }
+    ]
+  }
+}

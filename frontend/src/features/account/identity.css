@@ -1,0 +1,169 @@
+@import "../auth/auth.css";
+
+.lamu-account-theme {
+  --bg-base: var(--bg);
+  --bg-page: var(--bg-tint);
+  --surface-subtle: var(--surface-2);
+  --surface-card: var(--surface);
+  --border-subtle: var(--border);
+  --text-main: var(--text);
+  --text-sub: var(--text-soft);
+  --text-muted: var(--muted);
+  --btn-primary-bg: var(--primary);
+  --btn-primary-text: var(--on-primary);
+  --btn-primary-hover: var(--primary-hover);
+  --sage-soft: var(--secondary-soft);
+  --sage-text: var(--secondary);
+  --accent-warm: var(--accent);
+  --accent-text: var(--identity-warm-text);
+  --danger-base: var(--danger);
+  --danger-soft: var(--danger-bg);
+  --danger-text: var(--danger);
+  --shadow-sm: 0 1px 2px rgb(32 32 29 / 4%);
+  --radius-sm: var(--r-sm);
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --font-family: var(--font-sans);
+}
+
+:is(.identity-page, .lamu-account-header) {
+  --identity-warm-text: #87592c;
+}
+
+[data-theme="dark"] :is(.identity-page, .lamu-account-header) {
+  --identity-warm-text: #efb876;
+}
+
+.identity-wrap {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding: 36px 28px 72px;
+}
+
+.identity-page .identity-heading {
+  margin-bottom: 24px;
+}
+
+.identity-page .identity-heading h1 {
+  margin: 0;
+  font: 600 clamp(34px, 4.25vw, 58px)/1.12 var(--font-display);
+  letter-spacing: -.055em;
+  overflow-wrap: anywhere;
+}
+
+.identity-page :is(.identity-heading, .org-detail-description) em {
+  font: italic 400 1em/1.15 "Lamu Auth Serif", Georgia, serif;
+  letter-spacing: -.04em;
+  color: var(--identity-warm-text);
+}
+
+.identity-heading-actions,
+.identity-actions,
+.org-detail-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.identity-heading-actions { justify-content: space-between; }
+
+.identity-page .identity-context {
+  margin-bottom: 12px;
+}
+
+.identity-page .identity-context a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.identity-page .identity-context a:hover { text-decoration: underline; }
+
+.identity-page .btn {
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.identity-page :is(a, button, summary):focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 3px;
+}
+
+.identity-page :is(input, select, textarea, button, a, summary, [tabindex]) {
+  scroll-margin-block-start: 145px;
+}
+
+.identity-page :is(input, textarea):not([type="checkbox"], [type="radio"]) {
+  font-size: 16px;
+}
+
+.identity-page .field label {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.identity-page :is(input, textarea)[aria-invalid="true"] { border-color: var(--danger); }
+
+.org-detail-meta {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+
+.org-detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-block: 6px;
+  margin-bottom: 16px;
+  border-block: 1px solid var(--border);
+}
+
+.org-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  font: 600 14px/1.3 var(--font-sans);
+  cursor: pointer;
+}
+
+.org-detail-tabs button:hover { background: var(--surface-2); }
+
+.org-detail-tabs button[aria-selected="true"] {
+  background: var(--secondary-soft);
+  border-color: color-mix(in srgb, var(--secondary) 25%, var(--border));
+  color: var(--secondary);
+}
+
+@media (max-width: 768px) {
+  .identity-wrap { padding: 24px 18px 56px; }
+}
+
+@media (max-width: 480px) {
+  .org-detail-tabs button { padding-inline: 10px; font-size: 13px; gap: 5px; }
+  .org-detail-tabs svg { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .identity-heading { animation: identity-heading-enter 200ms ease-out; }
+
+  @keyframes identity-heading-enter {
+    from { opacity: .75; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

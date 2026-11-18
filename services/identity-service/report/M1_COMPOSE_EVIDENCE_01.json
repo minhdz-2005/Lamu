@@ -1,0 +1,23 @@
+{
+  "project": "lamu-m1-smoke-1794648203384",
+  "completed_at": "2026-11-14T09:25:57.246Z",
+  "postgres": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+  "images": {
+    "identity-db": "sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139",
+    "identity-service": "sha256:6ec0160b617ca63412de2dcb6dcb06149ad4ddeba59b3289ec3a7ae2bafbc9a8",
+    "gateway": "sha256:ca1e7211f42a1e15b9eb9cf1ef91a3af18955b54500ed6aa47b04b3b3f2079e3",
+    "identity-migrate": "sha256:60acb2a2a8352e2fdc0cfc6890e885c532ab7a82136d78527f57fbc587978749"
+  },
+  "checks": [
+    "apps healthy",
+    "migration deploy and redeploy",
+    "internal ports unpublished",
+    "full auth/profile/rotation/logout flow",
+    "restart persistence",
+    "seed twice",
+    "DB outage/recovery",
+    "Argon2 baseline",
+    "Jest/tsx absent from runtimes"
+  ],
+  "scope": "isolated synthetic Compose project; no RabbitMQ/frontend/Event"
+}

@@ -10,6 +10,7 @@ Tập hợp tài liệu kiến trúc, sơ đồ, quyết định kiến trúc, h
 | [ui/](ui/README.md) | mô tả năm trang giao diện MUST, đủ chi tiết để code |
 | [diagrams/](diagrams/README.md) | sơ đồ context, RBAC, giữ vé, Payment Saga, composition |
 | [adr/](adr/README.md) | quyết định kiến trúc dài hạn |
+| [integration/identity-handoff.md](integration/identity-handoff.md) | tiến độ bàn giao Identity/Gateway, phụ thuộc giữa service và vị trí cập nhật contract/bằng chứng |
 
 ## Đọc theo thứ tự nào
 

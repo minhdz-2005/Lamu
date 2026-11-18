@@ -1,286 +1,387 @@
 "use client";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-import { Button, Banner, Field, PasswordField, focusField } from "@/components/ui";
-import { useToast } from "@/components/Toast";
-import { request } from "@/lib/apiClient";
-import { sanitizeNext, setCachedProfile, setSession } from "@/lib/auth";
+import { focusField } from "@/components/ui";
+import { AuthField, AuthNotice, AuthTabs } from "./AuthControls";
+import { authContent as copy } from "./content";
+import { sanitizeNext, readSession, clearSession } from "@/lib/auth";
 import { ApiException, describeError } from "@/lib/errors";
 import { useSession } from "@/lib/useSession";
-import type { AuthTokens, MeProfile } from "@/lib/types";
+import { validateAuth, type AuthForm } from "./validation";
+import { loginAccount, registerAccount } from "./authApi";
+import { RecoveryForm } from "./RecoveryForm";
+import Link from "next/link";
+import "./auth.css";
 
 type Mode = "login" | "register";
-type FieldName = "email" | "password" | "display_name";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Tài khoản seed của mock gateway — xem frontend/README.md. */
-const SEED_ACCOUNTS = [
-  { role: "Chủ tọa", email: "demo@luma.dev" },
-  { role: "Khách", email: "khach@luma.dev" },
-  { role: "Diễn giả", email: "speaker@luma.dev" },
-];
-
-/** Validate phía UI trước khi gọi API — 01 §2. */
-function validate(mode: Mode, form: Record<FieldName, string>): Partial<Record<FieldName, string>> {
-  const errors: Partial<Record<FieldName, string>> = {};
-  const email = form.email.trim();
-  if (!email) errors.email = "Trường này không được để trống.";
-  else if (!EMAIL_RE.test(email.toLowerCase())) errors.email = "Email không hợp lệ.";
-
-  if (!form.password) errors.password = "Trường này không được để trống.";
-  else if (form.password.length < 8) errors.password = "Mật khẩu tối thiểu 8 ký tự.";
-
-  if (mode === "register") {
-    const name = form.display_name.trim();
-    if (!name) errors.display_name = "Trường này không được để trống.";
-    else if (name.length > 80) errors.display_name = "Tên hiển thị tối đa 80 ký tự.";
-  }
-  return errors;
-}
-
 export function AuthPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const toast = useToast();
-  const { state } = useSession();
-
-  const target = useMemo(() => sanitizeNext(searchParams.get("next")), [searchParams]);
-
+  const router = useRouter(),
+    searchParams = useSearchParams();
+  const { state, reload } = useSession();
+  const target = useMemo(
+    () => sanitizeNext(searchParams.get("next")),
+    [searchParams],
+  );
+  const [recovery, setRecovery] = useState(
+    searchParams.get("mode") === "recovery",
+  );
   const [mode, setMode] = useState<Mode>("login");
-  const [form, setForm] = useState<Record<FieldName, string>>({ email: "", password: "", display_name: "" });
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
-  const [apiError, setApiError] = useState<{ message: string; requestId?: string } | null>(null);
-  const [canRetry, setCanRetry] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
-
-  // 01 §5: vào /auth khi đã có token thì không hiện form.
+  const [form, setForm] = useState<AuthForm>({
+    email: "",
+    password: "",
+    display_name: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof AuthForm, string>>
+  >({});
+  const [apiError, setApiError] = useState<{
+    message: string;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false),
+    [created, setCreated] = useState(false),
+    [waitingProfile, setWaitingProfile] = useState(false),
+    [retryAt, setRetryAt] = useState(0),
+    [now, setNow] = useState(Date.now());
+  const pending = useRef(false),
+    controller = useRef<AbortController | null>(null),
+    revision = useRef(0);
+  useEffect(
+    () => () => {
+      revision.current++;
+      controller.current?.abort();
+    },
+    [],
+  );
   useEffect(() => {
-    if (state === "AUTHENTICATED") router.replace(target);
-  }, [state, target, router]);
-
-  // Liên kết "đăng nhập nhanh" ở trang giới thiệu gửi kèm email: điền sẵn, bắt đầu từ ô mật khẩu.
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  // One redirect owner; recovery remains accessible with an existing session.
   useEffect(() => {
-    const seeded = (searchParams.get("email") ?? "").trim();
-    if (!seeded) return;
-    setForm((prev) => (prev.email ? prev : { ...prev, email: seeded }));
-    document.getElementById("password")?.focus();
+    if (state === "AUTHENTICATED" && !recovery) {
+      setForm((p) => ({ ...p, password: "" }));
+      router.replace(target);
+    }
+  }, [state, recovery, router, target]);
+  useEffect(() => {
+    const email = (searchParams.get("email") ?? "").trim();
+    if (email) setForm((p) => ({ ...p, email: p.email || email }));
   }, [searchParams]);
-
-  const setValue = (name: FieldName) => (value: string) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
+  function changeMode(next: Mode) {
+    revision.current++;
+    controller.current?.abort();
+    setMode(next);
+    setCreated(false);
+    setWaitingProfile(false);
+    setApiError(null);
+    setFieldErrors({});
+    setForm((p) => ({ ...p, password: "" }));
+  }
+  const setValue = (name: keyof AuthForm) => (value: string) => {
+    setForm((p) => ({ ...p, [name]: value }));
+    setFieldErrors((p) => ({ ...p, [name]: undefined }));
   };
-
-  const validateOne = (name: FieldName) => () => {
-    const next = validate(mode, form);
-    setFieldErrors((prev) => ({ ...prev, [name]: next[name] }));
-  };
-
-  const finishLogin = useCallback(
-    async (tokens: AuthTokens, greeting: string) => {
-      setSession(tokens.access_token, tokens.refresh_token);
-      let displayName = "";
-      try {
-        const me = await request<MeProfile>("/users/me");
-        setCachedProfile(me);
-        displayName = me.display_name;
-      } catch {
-        // Header sẽ tự gọi lại; không chặn nước đi tiếp (01 §3.1 bước 2 là best effort).
-      }
-      toast.push(`${greeting}, ${displayName || "bạn"}.`, "success");
-      setRedirecting(true);
-      window.setTimeout(() => router.replace(target), 400);
-    },
-    [router, target, toast],
-  );
-
-  const login = useCallback(
-    async (email: string, password: string, greeting: string) => {
-      const tokens = await request<AuthTokens>("/auth/login", {
-        method: "POST",
-        body: { email, password },
-        anonymous: true,
-      });
-      await finishLogin(tokens, greeting);
-    },
-    [finishLogin],
-  );
-
-  const submit = async () => {
-    const errors = validate(mode, form);
-    if (Object.keys(errors).length > 0) {
+  async function submit() {
+    if (pending.current || retryAt > Date.now()) return;
+    const errors = validateAuth(mode, form);
+    if (Object.keys(errors).length) {
       setFieldErrors(errors);
-      focusField((Object.keys(errors) as FieldName[])[0]);
+      focusField(Object.keys(errors)[0]);
       return;
     }
-    if (submitting) return;
-
-    const email = form.email.trim().toLowerCase();
-    const password = form.password;
+    pending.current = true;
     setSubmitting(true);
     setApiError(null);
-    setCanRetry(false);
-
+    const run = revision.current;
+    controller.current = new AbortController();
+    const generation = readSession().generation;
+    let registering = mode === "register" && !created;
     try {
-      if (mode === "register") {
-        try {
-          await request("/auth/register", {
-            method: "POST",
-            body: { email, password, display_name: form.display_name.trim() },
-            anonymous: true,
-          });
-        } catch (err) {
-          if (err instanceof ApiException && err.code === "EMAIL_TAKEN") {
-            // 01 §3.2: đường user hay gặp nhất — giữ email, chuyển sang tab Đăng nhập.
-            setFieldErrors({ email: err.displayMessage });
-            setMode("login");
-            return;
-          }
-          throw err;
-        }
+      const email = form.email.trim().toLowerCase(),
+        password = form.password;
+      if (registering) {
+        await registerAccount(
+          { email, password, display_name: form.display_name.trim() },
+          controller.current.signal,
+        );
+        registering = false;
+        if (run !== revision.current) return;
+        setCreated(true);
       }
-      await login(email, password, mode === "register" ? "Tạo tài khoản xong" : "Chào mừng lại");
-    } catch (err) {
-      if (err instanceof ApiException && err.code === "UNAUTHENTICATED" && mode === "login") {
-        // 01 §3.1: một câu chung, không tiết lộ email nào tồn tại.
-        setApiError({ message: "Email hoặc mật khẩu không đúng.", requestId: err.requestId });
-        focusField("password");
-      } else {
-        const described = describeError(err);
-        setApiError(described);
-        setCanRetry(!(err instanceof ApiException && err.status >= 400 && err.status < 500));
+      await loginAccount(
+        { email, password },
+        controller.current.signal,
+        generation,
+      );
+      if (run !== revision.current) return;
+      setWaitingProfile(true);
+      setForm((p) => ({ ...p, password: "" }));
+      // useSession validates /users/me and owns the redirect; do not create another login.
+    } catch (e) {
+      if (run === revision.current) {
+        setApiError(
+          e instanceof ApiException && e.code === "UNAUTHENTICATED"
+            ? {
+                message: "Email hoặc mật khẩu không đúng.",
+              }
+            : describeError(e),
+        );
+        if (e instanceof ApiException && e.status === 429)
+          setRetryAt(Date.now() + e.retryAfter * 1000);
+        if (e instanceof ApiException && e.code === "EMAIL_TAKEN") {
+          setMode("login");
+          setCreated(false);
+        }
+        if (
+          registering &&
+          e instanceof ApiException &&
+          (e.status === 0 || e.status >= 500)
+        )
+          setApiError({
+            message:
+              "Yêu cầu chưa có kết quả chắc chắn. Tài khoản có thể đã được tạo; hãy đăng nhập hoặc khôi phục trước khi gửi lại đăng ký.",
+          });
       }
     } finally {
-      setSubmitting(false);
+      pending.current = false;
+      if (run === revision.current) setSubmitting(false);
     }
-  };
-
-  const locked = submitting || redirecting;
-
+  }
+  const locked = submitting;
+  const verifyingLogin =
+    waitingProfile && state !== "UNAVAILABLE" && state !== "ANONYMOUS";
   return (
-    <div className="auth-shell" style={{ opacity: redirecting ? 0.55 : 1 }}>
-      <div className="card auth-card">
-        <div className="row" style={{ gap: 10, marginBottom: 18 }}>
-          <span className="brand-mark" aria-hidden="true">
-            L
-          </span>
+    <div
+      className="lamu-auth-theme lamu-auth-page"
+      data-redirecting={state === "AUTHENTICATED" && !recovery}
+    >
+      <aside
+        className="lamu-auth-intro"
+        aria-label="Cùng Lamu gặp gỡ cộng đồng"
+      >
+        <p className="lamu-auth-eyebrow">
+          <span aria-hidden="true" /> CÙNG LAMU, NGOÀI ĐỜI
+        </p>
+        <p className="lamu-auth-statement">
+          Một lời rủ.
+          <br />
+          Một cuộc gặp.
+          <br />
+          <em>Một điều đáng nhớ.</em>
+        </p>
+        <p className="lamu-auth-introText">
+          Khám phá sự kiện bạn yêu thích và gặp những người cùng mối quan tâm.
+        </p>
+        <div className="lamu-auth-ticket" aria-hidden="true">
           <div>
-            <strong>Lamu</strong>
-            <p className="muted small" style={{ margin: 0 }}>
-              Đặt vé, quản lý vé và mở bán sự kiện.
-            </p>
+            <span>LAMU / LỜI HẸN TIẾP THEO</span>
+            <span>↗</span>
+          </div>
+          <strong>
+            Hẹn gặp bạn
+            <br />
+            <em>ở ngoài đời.</em>
+          </strong>
+          <div>
+            <span>CỘNG ĐỒNG & SỰ KIỆN</span>
+            <span>✳</span>
           </div>
         </div>
-
-        <div className="tabs" role="tablist" aria-label="Đăng nhập hoặc đăng ký">
-          {(["login", "register"] as Mode[]).map((value) => (
-            <button
-              key={value}
-              role="tab"
-              type="button"
-              className="tab"
-              aria-selected={mode === value}
-              data-active={mode === value}
-              disabled={locked}
-              onClick={() => setMode(value)}
-            >
-              {value === "login" ? "Đăng nhập" : "Đăng ký mới"}
-            </button>
-          ))}
-        </div>
-
-        {apiError && (
-          <Banner kind="error" requestId={apiError.requestId}>
-            {apiError.message}
-            {canRetry && (
-              <Button size="sm" style={{ marginLeft: 10 }} onClick={() => void submit()}>
-                Thử lại
-              </Button>
-            )}
-          </Banner>
-        )}
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-          noValidate
-        >
-          <Field
-            name="email"
-            label="Email"
-            type="email"
-            autoComplete="email"
-            requiredMark
-            readOnly={locked}
-            value={form.email}
-            onChange={setValue("email")}
-            onBlur={validateOne("email")}
-            error={fieldErrors.email}
-          />
-          <PasswordField
-            name="password"
-            label="Mật khẩu"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            requiredMark
-            readOnly={locked}
-            value={form.password}
-            onChange={setValue("password")}
-            onBlur={validateOne("password")}
-            error={fieldErrors.password}
-          />
-          {mode === "register" && (
-            <Field
-              name="display_name"
-              label="Tên hiển thị"
-              autoComplete="name"
-              requiredMark
-              maxLength={80}
-              readOnly={locked}
-              value={form.display_name}
-              onChange={setValue("display_name")}
-              onBlur={validateOne("display_name")}
-              error={fieldErrors.display_name}
-            />
-          )}
-
-          <Button type="submit" variant="primary" block loading={locked} disabled={locked}>
-            {redirecting ? "Đang mở..." : submitting ? "Đang kiểm tra..." : "Tiếp tục"}
-          </Button>
-          {mode === "login" && (
-            <p className="muted small" style={{ textAlign: "center", marginBottom: 0 }}>
-              Quên mật khẩu? Demo chưa có luồng đặt lại — hãy liên hệ ban tổ chức.
+      </aside>
+      <div className="lamu-auth-formColumn">
+        <section className="lamu-auth-card" aria-labelledby="auth-title">
+          <div className="lamu-auth-cardHeader">
+            <div className="lamu-auth-tagline">
+              <span aria-hidden="true" />
+              {copy.tagline}
+            </div>
+            <h1 id="auth-title">
+              {recovery ? "Quên mật khẩu" : copy.titles[mode]}
+            </h1>
+            <p>
+              {recovery
+                ? "Nhận mã qua email để đặt lại mật khẩu."
+                : copy.descriptions[mode]}
             </p>
-          )}
-        </form>
-
-        <hr className="hr" />
-        <p className="muted tiny" style={{ margin: "0 0 10px" }}>
-          Demo local — không gửi email thật. Bấm một tài khoản seed để điền đủ email + mật khẩu (
-          <span className="mono">password123</span>).
-        </p>
-        <div className="chips">
-          {SEED_ACCOUNTS.map((seed) => (
-            <button
-              key={seed.email}
-              type="button"
-              className="chip"
-              onClick={() => {
-                setMode("login");
-                setFieldErrors({});
-                setForm({ email: seed.email, password: "password123", display_name: "" });
-                focusField("password");
+          </div>
+          {recovery ? (
+            <RecoveryForm
+              email={form.email}
+              onClose={() => {
+                setRecovery(false);
+                changeMode("login");
               }}
-            >
-              {seed.role} · <span className="mono">{seed.email}</span>
-            </button>
-          ))}
-        </div>
+            />
+          ) : (
+            <>
+              <AuthTabs mode={mode} locked={locked} onChange={changeMode} />
+              <div
+                id="auth-panel"
+                role="tabpanel"
+                aria-labelledby={`auth-tab-${mode}`}
+              >
+                <div className="lamu-auth-notices">
+                  {searchParams.get("reason") === "password-changed" && (
+                    <AuthNotice kind="success">
+                      {copy.passwordChanged}
+                    </AuthNotice>
+                  )}
+                  {apiError && (
+                    <AuthNotice kind="error">{apiError.message}</AuthNotice>
+                  )}
+                  {created && (
+                    <AuthNotice kind="success">
+                      Tài khoản đã được tạo. Nếu đăng nhập lỗi, nút tiếp tục chỉ
+                      thử đăng nhập.
+                    </AuthNotice>
+                  )}
+                  {(state === "ERROR" || verifyingLogin) && (
+                    <AuthNotice kind="info">
+                      Đang xác minh phiên với dịch vụ danh tính. Nếu dịch vụ tạm
+                      lỗi, hãy tải lại phiên.
+                      <button
+                        type="button"
+                        className="lamu-auth-textButton"
+                        disabled={submitting}
+                        onClick={() =>
+                          void reload().catch((e) =>
+                            setApiError(describeError(e)),
+                          )
+                        }
+                      >
+                        Tải lại phiên
+                      </button>
+                    </AuthNotice>
+                  )}
+                  {retryAt > now && (
+                    <AuthNotice kind="warning">
+                      Vui lòng chờ {Math.ceil((retryAt - now) / 1000)} giây.
+                    </AuthNotice>
+                  )}
+                </div>
+                {state === "UNAVAILABLE" && (
+                  <p role="status">Tài khoản hiện không khả dụng.</p>
+                )}
+                {!verifyingLogin && (
+                  <form
+                    noValidate
+                    aria-busy={locked}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void submit();
+                    }}
+                  >
+                    {mode === "register" && !created && (
+                      <AuthField
+                        name="display_name"
+                        label={copy.name}
+                        placeholder={copy.namePlaceholder}
+                        autoComplete="name"
+                        readOnly={locked}
+                        value={form.display_name}
+                        onChange={setValue("display_name")}
+                        onBlur={() => setFieldErrors(validateAuth(mode, form))}
+                        error={fieldErrors.display_name}
+                      />
+                    )}
+                    <AuthField
+                      name="email"
+                      label={copy.email}
+                      type="email"
+                      placeholder={copy.emailPlaceholder}
+                      autoComplete="email"
+                      maxLength={254}
+                      readOnly={locked || created}
+                      value={form.email}
+                      onChange={setValue("email")}
+                      onBlur={() => {}}
+                      error={fieldErrors.email}
+                    />
+                    <AuthField
+                      name="password"
+                      label={copy.password}
+                      type="password"
+                      placeholder={copy.passwordPlaceholder}
+                      autoComplete={
+                        mode === "login" || created
+                          ? "current-password"
+                          : "new-password"
+                      }
+                      readOnly={locked}
+                      value={form.password}
+                      onChange={setValue("password")}
+                      onBlur={() => {}}
+                      error={fieldErrors.password}
+                      action={
+                        <button
+                          type="button"
+                          className="lamu-auth-forgot"
+                          disabled={locked}
+                          onClick={() => {
+                            revision.current++;
+                            setForm((p) => ({ ...p, password: "" }));
+                            setRecovery(true);
+                          }}
+                        >
+                          Quên mật khẩu?
+                        </button>
+                      }
+                    />
+                    <button
+                      type="submit"
+                      className="lamu-auth-submit"
+                      disabled={locked || retryAt > now}
+                    >
+                      {submitting && (
+                        <span
+                          className="lamu-auth-spinner"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span aria-live="polite">
+                        {submitting
+                          ? "Đang xử lý…"
+                          : mode === "register" && !created
+                            ? "Tạo tài khoản"
+                            : "Đăng nhập"}
+                      </span>
+                      {!submitting && <span aria-hidden="true">→</span>}
+                    </button>
+                  </form>
+                )}
+                {verifyingLogin && (
+                  <button
+                    type="button"
+                    className="lamu-auth-forgot"
+                    onClick={() => {
+                      setRecovery(true);
+                      setForm((p) => ({ ...p, password: "" }));
+                    }}
+                  >
+                    Quên mật khẩu?
+                  </button>
+                )}
+                {state === "ERROR" && (
+                  <button
+                    type="button"
+                    className="lamu-auth-textButton"
+                    onClick={() =>
+                      void clearSession().then(() => {
+                        setWaitingProfile(false);
+                        setForm((p) => ({ ...p, password: "" }));
+                      })
+                    }
+                  >
+                    Đăng nhập lại
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+        <Link className="lamu-auth-homeLink" href="/">
+          ← Trở về trang chủ Lamu
+        </Link>
       </div>
     </div>
   );

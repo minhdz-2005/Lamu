@@ -1,87 +1,185 @@
 "use client";
-
-import type { MeProfile } from "./types";
-
-const ACCESS_KEY = "luma.access";
-const REFRESH_KEY = "luma.refresh";
-const PROFILE_KEY = "luma.profile";
-
-type Listener = () => void;
-const listeners = new Set<Listener>();
-
+import type { Avatar, MeProfile } from "./types";
+import { keepNewestAvatar } from "./avatar";
+import { applyOrganizationUpdate, mergeOrganizationMemberships, organizationReads, type OrganizationProfileUpdate } from "./organizationProfile";
+import { authMode, isIdentityUuid, sessionKey } from "./authMode";
+export interface SessionRecord {
+  version: 2;
+  generation: string;
+  access: string | null;
+  refresh: string | null;
+  profile?: MeProfile;
+  refreshAttempt?: string;
+  unavailable?: boolean;
+}
+const listeners = new Set<() => void>();
 function emit() {
   for (const fn of listeners) fn();
 }
-
-export function subscribeAuth(fn: Listener): () => void {
+export function subscribeAuth(fn: () => void): () => void {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  const storage = (event: StorageEvent) => {
+    if (event.key === sessionKey || event.key === null) fn();
+  };
+  window.addEventListener("storage", storage);
+  window.addEventListener("focus", fn);
+  if (typeof document !== "undefined")
+    document.addEventListener("visibilitychange", fn);
+  return () => {
+    listeners.delete(fn);
+    window.removeEventListener("storage", storage);
+    window.removeEventListener("focus", fn);
+    if (typeof document !== "undefined")
+      document.removeEventListener("visibilitychange", fn);
+  };
 }
-
-export function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(ACCESS_KEY);
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(REFRESH_KEY);
-}
-
-export function setSession(access: string, refresh: string) {
-  window.localStorage.setItem(ACCESS_KEY, access);
-  window.localStorage.setItem(REFRESH_KEY, refresh);
-  emit();
-}
-
-export function clearSession() {
-  window.localStorage.removeItem(ACCESS_KEY);
-  window.localStorage.removeItem(REFRESH_KEY);
-  window.localStorage.removeItem(PROFILE_KEY);
-  emit();
-}
-
-export function isAuthenticated(): boolean {
-  return Boolean(getAccessToken());
-}
-
-export function getCachedProfile(): MeProfile | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(PROFILE_KEY);
-  if (!raw) return null;
+export function readSession(): SessionRecord {
+  const empty: SessionRecord = {
+    version: 2,
+    generation: "empty",
+    access: null,
+    refresh: null,
+  };
+  if (typeof window === "undefined") return empty;
   try {
-    return JSON.parse(raw) as MeProfile;
+    const value = JSON.parse(window.localStorage.getItem(sessionKey) ?? "null");
+    return value?.version === 2 &&
+      typeof value.generation === "string" &&
+      (value.access === null || typeof value.access === "string") &&
+      (value.refresh === null || typeof value.refresh === "string")
+      ? value
+      : empty;
   } catch {
-    return null;
+    return empty;
   }
 }
-
-export function setCachedProfile(profile: MeProfile) {
-  window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+// Internal writers call this only while holding withSessionLock.
+export function writeSession(record: SessionRecord) {
+  window.localStorage.setItem(sessionKey, JSON.stringify(record));
   emit();
 }
-
-/** Route công khai theo 00 §8: token hết hạn không được đá người đọc khỏi trang đang xem. */
-const PUBLIC_PATHS = ["/", "/events", "/auth"];
-
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/events/");
-}
-
-/** Điều hướng tới /auth và nhớ trang đang ở, theo 00 §8. */
-export function redirectToAuth(next: string) {
-  if (typeof window !== "undefined" && isPublicPath(window.location.pathname)) return;
-  const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/events";
-  const target = `/auth?next=${encodeURIComponent(safe)}`;
-  if (window.location.pathname + window.location.search !== target) {
-    window.location.assign(target);
+export async function withSessionLock<T>(work: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    try {
+      return await navigator.locks.request(
+        sessionKey,
+        { mode: "exclusive", signal: AbortSignal.timeout(15000) },
+        work,
+      );
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        ["AbortError", "TimeoutError"].includes(error.name)
+      )
+        throw new Error(
+          "Phiên đang được cập nhật ở tab khác. Hãy chờ rồi thử lại.",
+        );
+      throw error;
+    }
   }
+  if (authMode === "real")
+    throw new Error(
+      "Trình duyệt cần hỗ trợ Web Locks để bảo vệ phiên. Hãy dùng trình duyệt mới và HTTPS.",
+    );
+  return work();
+}
+export const getAccessToken = () => readSession().access;
+export const getRefreshToken = () => readSession().refresh;
+export async function setSession(access: string, refresh: string) {
+  await withSessionLock(async () => {
+    writeSession({
+      version: 2,
+      generation: crypto.randomUUID(),
+      access,
+      refresh,
+    });
+  });
+}
+export async function clearSession(expectedGeneration?: string) {
+  return withSessionLock(async () => {
+    if (expectedGeneration !== undefined && readSession().generation !== expectedGeneration)
+      return false;
+    writeSession({
+      version: 2,
+      generation: crypto.randomUUID(),
+      access: null,
+      refresh: null,
+    });
+    return true;
+  });
+}
+export const isAuthenticated = () =>
+  Boolean(readSession().access && readSession().profile);
+export const getCachedProfile = () => readSession().profile ?? null;
+export async function setCachedProfile(
+  profile: MeProfile,
+  generation = readSession().generation,
+  started = organizationReads.start(),
+) {
+  return updateCachedProfile(generation, (current) =>
+    mergeOrganizationMemberships(keepNewestAvatar(profile, current), current, generation, started),
+  );
+}
+export function setCachedOrganization(
+  profile: MeProfile, generation: string, orgId: string, update: OrganizationProfileUpdate,
+) {
+  return updateCachedProfile(generation, (current) => {
+    if (current && current.id !== profile.id) return null;
+    return updateProfileOrganization(current ?? profile, orgId, update);
+  });
 }
 
-/** Only cho phép next nội bộ, chống open redirect (01 §5). */
+export function updateProfileOrganization(
+  profile: MeProfile, orgId: string, update: OrganizationProfileUpdate,
+): MeProfile {
+  return {
+    ...profile,
+    memberships: profile.memberships.map((row) =>
+      row.organization_id === orgId ? applyOrganizationUpdate(row, update) : row,
+    ),
+  };
+}
+export async function setCachedAvatar(profile: MeProfile, avatar: Avatar, generation: string) {
+  return updateCachedProfile(generation, (current) => {
+    if (current && current.id !== profile.id) return null;
+    const base = current ?? profile;
+    return keepNewestAvatar({ ...base, avatar }, base);
+  });
+}
+async function updateCachedProfile(
+  generation: string,
+  update: (current: MeProfile | undefined) => MeProfile | null,
+) {
+  return withSessionLock(async () => {
+    const current = readSession();
+    if (current.generation !== generation || !current.access) return null;
+    const next = update(current.profile);
+    if (next) writeSession({ ...current, profile: next });
+    return next;
+  });
+}
 export function sanitizeNext(value: string | null | undefined): string {
-  if (!value) return "/events";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/events";
-  if (value.startsWith("/auth")) return "/events";
-  return value;
+  if (
+    value === "/me" ||
+    value === "/me/invitations" ||
+    value === "/organizations"
+  )
+    return value;
+  if (
+    value?.startsWith("/organizations/") &&
+    isIdentityUuid(value.slice("/organizations/".length))
+  )
+    return value;
+  return "/me";
+}
+export function redirectToAuth(next: string) {
+  if (
+    typeof window === "undefined" ||
+    ["/", "/auth", "/events"].includes(window.location.pathname) ||
+    window.location.pathname.startsWith("/events/")
+  )
+    return;
+  window.location.assign(
+    "/auth?next=" + encodeURIComponent(sanitizeNext(next)),
+  );
 }
