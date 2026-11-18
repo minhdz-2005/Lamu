@@ -25,10 +25,10 @@ Quy tắc: `message_id` trên broker chính là `event_id` envelope, nên consum
 
 ## Vì sao payload phải đủ ngay từ đầu
 
-- **Bốn** event của Notification (`ReservationReleased`, `RegistrationConfirmed`, `TicketIssued`, `BookingCancelled`) phải tự mang `recipient_email` + `event_title` + `event_starts_at`: email "vé của bạn" không thể gọi REST sang Registration hay Event để lấy tên sự kiện, và cũng không được gọi sang Identity để lấy email (quyết định 1, nguyên tắc service-autonomy §7 kiến trúc).
-- `ReservationCreated` phải mang `reservation_id` + `organization_id` + `total_amount` + `currency`: Payment tạo giao dịch chỉ từ message, không hỏi lại ai. Thiếu một trong bốn field là phải gọi REST ngược chiều — `organization_id` là để sau này kiểm quyền `payment.refund` mà không cần tra Event.
+- **Bốn** event của Notification (`ReservationReleased`, `RegistrationConfirmed`, `TicketIssued`, `BookingCancelled`) phải tự mang `recipient_email` + `event_title` + `event_starts_at`: email "vé của bạn" không thể gọi REST sang Registration hay Event để lấy tên sự kiện, và cũng không được gọi sang Identity để lấy email (quyết định 1, nguyên tắc service-autonomy §7 kiến trúc). Registration có email là nhờ `X-User-Email` do Gateway chuyển tiếp từ claim `email` trong access token của Identity, lưu vào `reservations.recipient_email` lúc giữ chỗ (BR-RSV-06) — worker và consumer không có request context đọc lại cột này.
+- `ReservationCreated` phải mang `reservation_id` + `organization_id` + `total_amount` + `currency`: Payment tạo giao dịch chỉ từ message, không hỏi lại ai. Thiếu một trong bốn field là phải gọi REST ngược chiều — `organization_id` là để sau này kiểm quyền `payment.refund` mà không cần tra Event; Registration lấy giá trị này từ `event_snapshot.organization_id`.
 - `PaymentSucceeded`/`PaymentFailed` phải mang `reservation_id`: đó là khóa duy nhất Registration dùng để confirm hoặc giải phóng quota.
-- `EventPublished`/`EventUpdated`/`EventCancelled` phải mang `title` và `slug`: đó là nguồn duy nhất của `event_snapshot.title`/`slug`, thứ mà trang "Vé của tôi" hiển thị. `EventUpdated` không mang `organization_id` vì `event_snapshot` khóa theo `event_id` và org không bao giờ đổi.
+- `EventPublished`/`EventUpdated`/`EventCancelled` phải mang `title` và `slug`: đó là nguồn duy nhất của `event_snapshot.title`/`slug`, thứ mà trang "Vé của tôi" hiển thị. `event_snapshot.organization_id` ghi từ `EventPublished`/`EventCancelled`; `EventUpdated` không mang lại field này vì org không bao giờ đổi, consumer giữ nguyên giá trị cũ.
 - `RefundCompleted` và ba event Identity chưa có consumer ở MUST, vẫn cần schema để producer không đổi shape tùy tiện.
 
 ## Trạng thái tài liệu

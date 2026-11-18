@@ -69,6 +69,7 @@ Enum khóa. Không service, không seed, không UI nào được thêm giá tr�
 | BR-RSV-03 | `expires_at = created_at + RESERVATION_HOLD_TTL_SECONDS` (mặc định 120). Bất biến cấu hình: `PAYMENT_MOCK_DELAY_SECONDS` < TTL. |
 | BR-RSV-04 | Worker hết hạn nhả mỗi reservation **đúng một lần**, kể cả khi nhiều tiến trình cùng quét (`FOR UPDATE SKIP LOCKED`). |
 | BR-RSV-05 | Rời trang 03 khi đang `HELD` không hủy hộ: UI dừng poll, chỗ tự nhả theo BR-RSV-03. |
+| BR-RSV-06 | `recipient_email` của mọi event Registration phát lấy từ `reservations.recipient_email`, ghi một lần lúc giữ chỗ từ `X-User-Email` (Gateway ghi đè từ claim `email` đã verify). Thiếu header trên `POST /events/{id}/reservations` → `400 VALIDATION_FAILED`; Registration không đoán email, không gọi REST sang Identity. |
 
 ### 2.3 `tickets.status` và `ticket_types.status`
 
@@ -136,7 +137,7 @@ Enum khóa. Không service, không seed, không UI nào được thêm giá tr�
 | BR-ASY-02 | Consumer kiểm `message_id` (= `event_id`) trong `processed_messages` **trước khi** xử lý; xử lý + ghi dấu trong một transaction; ack sau commit. | Registration, Payment, Notification |
 | BR-ASY-03 | Handler lỗi: thử lại trong tiến trình 1s → 5s → 25s, rồi `basic.nack(requeue = false)` sang DLQ. Không bao giờ `requeue = true` để thử lại. | mọi consumer |
 | BR-ASY-04 | Không tự bơm lại DLQ. Phát lại thủ công phải giữ **cùng** `message_id` để BR-ASY-02 còn chặn được phần ghi lặp. | vận hành |
-| BR-ASY-05 | `EventUpdated`/`EventPublished`/`EventCancelled` cập nhật `event_snapshot` theo kiểu ghi đè toàn bộ field có trong payload; hai hàng đợi cùng tiêu `EventCancelled` (Registration và Payment) hoàn toàn độc lập, không bên nào chờ bên nào. | Registration, Payment |
+| BR-ASY-05 | `EventUpdated`/`EventPublished`/`EventCancelled` cập nhật `event_snapshot` theo kiểu ghi đè toàn bộ field có trong payload; `organization_id` chỉ ghi khi payload mang (`EventPublished`/`EventCancelled`), `EventUpdated` giữ nguyên giá trị cũ. Hai hàng đợi cùng tiêu `EventCancelled` (Registration và Payment) hoàn toàn độc lập, không bên nào chờ bên nào. | Registration, Payment |
 | BR-ASY-06 | Đọc dữ liệu của service khác: **chỉ** từ payload message hoặc từ projection của mình. Không có REST gọi ngược từ consumer về producer. | mọi service |
 
 ## 7. Email
@@ -153,7 +154,7 @@ Enum khóa. Không service, không seed, không UI nào được thêm giá tr�
 
 | ID | Luật |
 |---|---|
-| BR-AUTH-01 | JWT HS256, `JWT_SECRET` chung cho network local; Identity ký, Gateway verify, service nhận `X-User-Id` và **không** tự verify chữ ký (quyết định 8). |
+| BR-AUTH-01 | JWT HS256, `JWT_SECRET` chung cho network local; Identity ký (access token mang claim `email`), Gateway verify rồi chuyển tiếp `X-User-Id` + `X-User-Email` **ghi đè từ claim**, không nhận từ client; service nhận hai header đó và **không** tự verify chữ ký (quyết định 8). |
 | BR-AUTH-02 | Refresh token lưu hash (`refresh_sessions.token_hash`), logout là thu hồi thật (`revoked_at`), không phải xóa phía client. |
 | BR-AUTH-03 | Sai credential trả **một** câu chung, không tiết lộ email nào có tài khoản (01 §3.1). |
 | BR-AUTH-04 | MUST không có endpoint đặt lại mật khẩu. UI không được vẽ link "Quên mật khẩu?" (01 §1). |
