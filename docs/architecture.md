@@ -1,4 +1,4 @@
-# Kế hoạch kiến trúc LumaSOA
+# Kế hoạch kiến trúc Lamu
 
 Cập nhật P8 14/11/2026: đây là bản đồ kiến trúc/phạm vi toàn hệ thống, không phải tất cả đã triển khai. Identity/Gateway M1–M3 đã có; [báo cáo P8](../services/identity-service/report/REPORT_P8_INTEGRATION_HANDOFF_01.md) ghi kiểm chứng mới. Trạng thái/dependency/owner và mapping bàn giao ở [handoff §7–§10](integration/identity-handoff.md). Event HTTP resolver chỉ [DRAFT](../shared/contracts/http/event-context.draft.openapi.json), provider/adapter/browser/business consumers thật vẫn M4.
 
@@ -16,7 +16,7 @@ Nền tảng quản lý tổ chức, sự kiện, RBAC đa cấp và đăng ký 
 
 | # | Quyết định | Lý do chọn hướng đơn giản |
 |---|---|---|
-| 1 | Email người nhận nằm **trong payload event**. `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased`, `BookingCancelled` đều mang `recipient_email`; endpoint `GET /internal/users/{id}/contact` xuống STRETCH | Notification không gọi ngược Identity nên vẫn đúng nguyên tắc service-autonomy, và đỡ một điểm tích hợp |
+| 1 | Email người nhận nằm **trong payload event**. `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased`, `BookingCancelled` đều mang `recipient_email`; endpoint `GET /internal/users/{id}/contact` xuống STRETCH. Registration lấy email từ `X-User-Email` do Gateway chuyển tiếp (claim `email` trong access token của Identity) và lưu vào `reservations.recipient_email` lúc giữ chỗ để worker/consumer dùng lại | Notification không gọi ngược Identity nên vẫn đúng nguyên tắc service-autonomy, và đỡ một điểm tích hợp |
 | 2 | **Vé miễn phí xác nhận trong một bước.** `total_amount = 0` thì `POST /reservations` chuyển thẳng sang `CONFIRMED` và phát vé trong cùng transaction, không đi qua Payment | Bỏ được một vòng saga cho luồng dễ nhất của demo |
 | 3 | **Vé có phí xác nhận bằng event, không bằng nút bấm.** Reservation ở `HELD`; chỉ `PaymentSucceeded` mới confirm; frontend theo dõi qua `GET /reservations/{id}` | Một đường confirm duy nhất, không có trạng thái trung gian do user tạo |
 | 4 | **Payment khởi động bằng `ReservationCreated` từ broker**, không phải lệnh gọi REST. `PAYMENT_PROVIDER_MODE=mock` tự trả SUCCESS sau `PAYMENT_MOCK_DELAY_SECONDS`; `POST /internal/payments` xuống STRETCH | Tài liệu cũ nói cả hai cách; chọn một để hết mâu thuẫn |
@@ -82,7 +82,7 @@ M1 Auth/Gateway đã chốt theo [ADR 0002](adr/0002-m1-auth-gateway.md) và [co
 
 **Endpoints:** `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; `GET /users/me`; `POST /organizations`; `GET /organizations/{orgId}`; `GET /organizations/{orgId}/members`; `PUT /organizations/{orgId}/members/{userId}/roles`; `GET /public/organizations/{slug}`; `GET /internal/users/{userId}/public-profile`; `POST /internal/authorization/check`. M2/P6: create/list/accept/decline/revoke invitation theo canonical v1.2.0. STRETCH: `GET /internal/users/{userId}/contact`.
 
-**Tích hợp:** Gateway verify JWT HS256 bằng secret chung (quyết định 8), service nhận `X-User-Id`; Event Service gọi authorization check. Phát `UserRegistered`, `OrganizationCreated`, `MembershipChanged`.
+**Tích hợp:** Gateway verify JWT HS256 bằng secret chung (quyết định 8), service nhận `X-User-Id` + `X-User-Email`; Gateway **ghi đè** hai header này từ claim đã verify (`email` là claim bắt buộc trong access token), không nhận giá trị từ client. Event Service gọi authorization check. Phát `UserRegistered`, `OrganizationCreated`, `MembershipChanged`.
 
 ### 3.1.1 Permission và role seed
 
@@ -111,6 +111,9 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 | `event_speakers` (STRETCH) | `id UUID PK`, `event_id UUID`, `user_id UUID NULL`, `name TEXT`, `bio TEXT`, `sort_order INT` |
 | `event_schedule_items` (STRETCH) | `id UUID PK`, `event_id UUID`, `title TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `speaker_id UUID NULL` |
 | `event_assets` (STRETCH) | `id UUID PK`, `event_id UUID`, `asset_url TEXT`, `kind TEXT`, `metadata JSONB` |
+| `outbox_events` | `id BIGSERIAL PK`, `aggregate_id UUID`, `event_type TEXT`, `payload JSONB`, `created_at TIMESTAMPTZ`, `published_at TIMESTAMPTZ NULL` |
+
+`events` cần unique `(organization_id, slug)`: đó là ràng buộc tạo ra `SLUG_TAKEN` 409, không phải một kiểm tra trong code.
 
 `organization_id`, `created_by`, `user_id` là tham chiếu, không FK sang Identity DB. Endpoints: `POST /events`, `GET/PATCH /events/{eventId}`, `POST /events/{eventId}/publish`, `POST /events/{eventId}/cancel`, `GET /organizations/{orgId}/events`, `GET /public/events`, `GET /public/events/{slug}`. Kiểm tra quyền qua Identity trước mọi thay đổi. Tạo `DRAFT` không phát event; chỉ phát `EventUpdated` khi sửa, `EventPublished` khi publish, `EventCancelled` khi hủy. `PATCH` sau PUBLISHED chỉ sửa `title`, `description`, `venue`; đổi `starts_at`/`ends_at` khi `sold + reserved > 0` trả 409 (quyết định 6). `EventPublished` và `EventCancelled` mang `event_id`, `organization_id`, `slug`, `title`, `status`, `starts_at`, `ends_at` để consumer không phải gọi lại Event; `EventUpdated` mang đủ bộ `title`, `slug`, `starts_at`, `ends_at`, `status` để Registration ghi đè `event_snapshot`.
 
@@ -122,15 +125,17 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 |---|---|
 | `ticket_types` | `id UUID PK`, `event_id UUID`, `name TEXT`, `price NUMERIC(12,2)`, `currency CHAR(3)`, `capacity INT`, `sales_start/end TIMESTAMPTZ`, `status TEXT` (`ACTIVE`/`CLOSED`) |
 | `inventory` | `ticket_type_id UUID PK`, `capacity INT`, `sold INT`, `reserved INT`, `version BIGINT`, `updated_at TIMESTAMPTZ` |
-| `reservations` | `id UUID PK`, `user_id UUID`, `event_id UUID`, `status TEXT` (`HELD`/`CONFIRMED`/`RELEASED`), `payment_status TEXT NULL` (`PENDING`/`SUCCEEDED`/`FAILED`), `expires_at TIMESTAMPTZ`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ` |
+| `reservations` | `id UUID PK`, `user_id UUID`, `recipient_email TEXT`, `event_id UUID`, `status TEXT` (`HELD`/`CONFIRMED`/`RELEASED`), `payment_status TEXT NULL` (`PENDING`/`SUCCEEDED`/`FAILED`), `expires_at TIMESTAMPTZ`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ` |
 | `reservation_items` | `id UUID PK`, `reservation_id UUID`, `ticket_type_id UUID`, `quantity INT`, `unit_price NUMERIC(12,2)` |
 | `registrations` | `id UUID PK`, `reservation_id UUID`, `user_id UUID`, `status TEXT`, `registered_at TIMESTAMPTZ` |
 | `tickets` | `id UUID PK`, `registration_id UUID`, `ticket_type_id UUID`, `code TEXT UNIQUE`, `status TEXT` (`ISSUED`/`USED`/`VOIDED`), `checked_in_at TIMESTAMPTZ NULL` |
-| `event_snapshot` | `event_id UUID PK`, `title TEXT`, `slug TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`; cập nhật từ `EventPublished`/`EventUpdated`/`EventCancelled` |
+| `event_snapshot` | `event_id UUID PK`, `organization_id UUID`, `title TEXT`, `slug TEXT`, `status TEXT`, `starts_at TIMESTAMPTZ`, `ends_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`; cập nhật từ `EventPublished`/`EventUpdated`/`EventCancelled`. `organization_id` ghi từ `EventPublished`/`EventCancelled`; `EventUpdated` không mang field này nên giữ nguyên giá trị cũ |
+| `outbox_events` | `id BIGSERIAL PK`, `aggregate_id UUID`, `event_type TEXT`, `payload JSONB`, `created_at TIMESTAMPTZ`, `published_at TIMESTAMPTZ NULL` |
+| `processed_messages` | `message_id UUID PK`, `processed_at TIMESTAMPTZ` |
 
 `event_id`, `user_id` là ID tham chiếu, không FK chéo. Registration không gọi REST sang Event: mọi kiểm tra "event đã publish chưa, còn trong thời gian bán không" đọc `event_snapshot` (eventual consistency, chậm nhất vài giây). Endpoint: `POST /events/{id}/ticket-types`, `GET /events/{id}/ticket-types`, `PATCH /ticket-types/{id}`, `GET /events/{id}/availability`, `POST /events/{id}/reservations` (bắt buộc `Idempotency-Key`), `GET /reservations/{id}`, `POST /reservations/{id}/confirm` (nội bộ, chỉ consumer `PaymentSucceeded` gọi; vé miễn phí đã confirm ngay trong `POST /reservations` nên không tới đây; không route qua Gateway cho user), `DELETE /reservations/{id}`, `GET /users/me/tickets`, `GET /events/{id}/tickets` (organizer, quyền `event.read`), `POST /tickets/check-in` (body `{code}`, organizer check-in theo mã vé in trên ticket; quyền `ticket.checkin`).
 
-**Concurrency:** transaction khóa hàng inventory bằng `SELECT ... FOR UPDATE`; không gọi mạng trong transaction. Ràng buộc `CHECK (sold >= 0 AND reserved >= 0 AND sold + reserved <= capacity)`. Ghi reservation và tăng reserved nguyên tử. Nếu `total_amount = 0` thì confirm luôn trong cùng transaction (quyết định 2). Confirm chuyển `reserved` sang `sold`, tạo ticket và ghi outbox. Worker hết hạn dùng `FOR UPDATE SKIP LOCKED` để giải phóng `reserved` đúng một lần. Phát `ReservationCreated` (chỉ khi `total_amount > 0`, payload mang `event_id`), `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased` (`reason` ∈ `EXPIRED`/`CANCELLED`/`PAYMENT_FAILED`/`EVENT_CANCELLED`), `BookingCancelled`; nhận `EventCancelled`, `PaymentSucceeded`, `PaymentFailed`. Event gửi cho Notification phải mang `recipient_email` (quyết định 1).
+**Concurrency:** transaction khóa hàng inventory bằng `SELECT ... FOR UPDATE`; không gọi mạng trong transaction. Ràng buộc `CHECK (sold >= 0 AND reserved >= 0 AND sold + reserved <= capacity)`. Ghi reservation và tăng reserved nguyên tử. Nếu `total_amount = 0` thì confirm luôn trong cùng transaction (quyết định 2). Confirm chuyển `reserved` sang `sold`, tạo ticket và ghi outbox. Worker hết hạn dùng `FOR UPDATE SKIP LOCKED` để giải phóng `reserved` đúng một lần. Phát `ReservationCreated` (chỉ khi `total_amount > 0`, payload mang `event_id` và `organization_id` lấy từ `event_snapshot`), `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased` (`reason` ∈ `EXPIRED`/`CANCELLED`/`PAYMENT_FAILED`/`EVENT_CANCELLED`), `BookingCancelled`; nhận `EventCancelled`, `PaymentSucceeded`, `PaymentFailed`. Event gửi cho Notification phải mang `recipient_email` lấy từ `reservations.recipient_email` (quyết định 1) — cột này ghi một lần lúc giữ chỗ từ `X-User-Email`, nên worker hết hạn và consumer không có request context vẫn phát đủ payload.
 
 ### 3.4 Payment Service (`payment_db`)
 
@@ -138,12 +143,12 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 
 | Bảng | Cột chính |
 |---|---|
-| `payments` | `id UUID PK`, `reservation_id UUID`, `event_id UUID`, `user_id UUID`, `amount NUMERIC(12,2)`, `currency CHAR(3)`, `status TEXT`, `provider_reference TEXT NULL`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ` |
+| `payments` | `id UUID PK`, `reservation_id UUID`, `event_id UUID`, `organization_id UUID`, `user_id UUID`, `amount NUMERIC(12,2)`, `currency CHAR(3)`, `status TEXT`, `provider_reference TEXT NULL`, `idempotency_key TEXT UNIQUE`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ` |
 | `refunds` | `id UUID PK`, `payment_id UUID`, `amount NUMERIC(12,2)`, `status TEXT`, `provider_reference TEXT NULL`, `created_at TIMESTAMPTZ` |
 | `processed_messages` | `message_id UUID PK`, `processed_at TIMESTAMPTZ` |
-| `outbox_events` | `id UUID PK`, `aggregate_id UUID`, `event_type TEXT`, `payload JSONB`, `published_at TIMESTAMPTZ NULL` |
+| `outbox_events` | `id BIGSERIAL PK`, `aggregate_id UUID`, `event_type TEXT`, `payload JSONB`, `created_at TIMESTAMPTZ`, `published_at TIMESTAMPTZ NULL` |
 
-`reservation_id`/`user_id`/`event_id` là ID tham chiếu, không FK chéo. Luồng MUST: nhận `ReservationCreated` → tạo `payments` ở `PENDING` với `idempotency_key` lấy bằng `reservation_id` của message (một reservation một giao dịch) → mock provider cho kết quả (tự SUCCESS sau `PAYMENT_MOCK_DELAY_SECONDS`, hoặc do `simulate` bấm trong demo) → phát `PaymentSucceeded`/`PaymentFailed`. Nhận `EventCancelled` → refund 100% các giao dịch SUCCESS có cùng `event_id`, phát `RefundCompleted` (quyết định 7). API nội bộ: `GET /internal/payments/{id}`, `GET /internal/payments/by-reservation/{reservationId}`, `POST /internal/payments/{id}/simulate`, `POST /internal/payments/{id}/refund`. STRETCH: `POST /internal/payments` (tạo giao dịch bằng REST), adapter provider thật, báo cáo đối soát.
+`reservation_id`/`user_id`/`event_id`/`organization_id` là ID tham chiếu, không FK chéo. Luồng MUST: nhận `ReservationCreated` → tạo `payments` ở `PENDING` với `idempotency_key` lấy bằng `reservation_id` của message (một reservation một giao dịch) → mock provider cho kết quả (tự SUCCESS sau `PAYMENT_MOCK_DELAY_SECONDS`, hoặc do `simulate` bấm trong demo) → phát `PaymentSucceeded`/`PaymentFailed`. Nhận `EventCancelled` → refund 100% các giao dịch SUCCESS có cùng `event_id`, phát `RefundCompleted` (quyết định 7). API nội bộ: `GET /internal/payments/{id}`, `GET /internal/payments/by-reservation/{reservationId}`, `POST /internal/payments/{id}/simulate`, `POST /internal/payments/{id}/refund`. STRETCH: `POST /internal/payments` (tạo giao dịch bằng REST), adapter provider thật, báo cáo đối soát.
 
 ### 3.5 Notification Service (`notification_db`)
 
@@ -158,6 +163,20 @@ Migration seed của Identity tạo đúng 10 mã permission: `org.read`, `org.m
 Ở MUST, kết quả mỗi lần gửi ghi trực tiếp vào `notification_jobs.status`/`attempts` và log; không cần bảng `delivery_attempts`.
 
 Nhận `RegistrationConfirmed`, `TicketIssued`, `ReservationReleased`, `BookingCancelled` từ RabbitMQ; mỗi payload đã mang `recipient_email` (quyết định 1). Notification **không** nhận `EventUpdated` hay `EventCancelled` vì hai event đó không chỉ định người nhận cụ thể. Lưu message đã xử lý để consumer idempotent. Local có thể gửi vào Mailpit hoặc log giả lập.
+
+### 3.6 Hai bảng hạ tầng lặp lại ở mọi service
+
+`outbox_events` và `processed_messages` có mặt trong mọi DB của service rơi vào từng vai tương ứng, với đúng một shape đã liệt kê ở các bảng trên:
+
+| Service | `outbox_events` | `processed_messages` | Lý do |
+|---|---|---|---|
+| Identity | có | không | phát 3 event, không tiêu event nào |
+| Event | có | không | phát 3 event, không tiêu event nào |
+| Registration | có | có | phát 5 event, tiêu `EventPublished`/`EventUpdated`/`EventCancelled`/`PaymentSucceeded`/`PaymentFailed` |
+| Payment | có | có | phát 3 event, tiêu `ReservationCreated`/`EventCancelled` |
+| Notification | không | có | chỉ ghi job email, không phát event ở MUST |
+
+`outbox_events.id` là `BIGSERIAL` chứ không phải UUID: worker outbox publish theo thứ tự `id` tăng dần (xem [docs/api/messaging.md §6](api/messaging.md)), mà UUID v4 không xếp theo thứ tự chèn. Quy tắc ghi và đọc hai bảng này nằm ở §6–§8 của messaging.md, không service nào tự đặt biến thể.
 
 ## 4. Luồng nghiệp vụ
 
@@ -192,11 +211,28 @@ Registration: COMMIT
 
 Confirm cũng là một transaction: khóa reservation/inventory, xác nhận `HELD` và chưa hết hạn, trừ `reserved`, cộng `sold`, tạo registration/ticket, ghi outbox rồi commit. Với vé có phí, đường confirm duy nhất là consumer `PaymentSucceeded` gọi `POST /reservations/{id}/confirm` nội bộ; vé miễn phí đã confirm ở bước giữ chỗ (quyết định 2). Hết hạn hoặc hủy là hành động bù trừ giảm `reserved` và phát `ReservationReleased` với `reason` tương ứng. Không giữ lock khi gọi service, gửi email hoặc chờ broker. Trả `409 SOLD_OUT` nếu quota không đủ. Transactional Outbox bảo đảm commit dữ liệu và phát event nhất quán. Đây là Saga ngắn: hold → confirm hoặc release.
 
+Chỉ vé có phí đi qua saga. Với `total_amount = 0`, Registration confirm và phát vé ngay trong transaction giữ chỗ (quyết định 2), Payment không liên quan. Với vé có phí, Registration phát `ReservationCreated` sau khi giữ quota; Payment tiêu message, tạo giao dịch idempotent rồi phát `PaymentSucceeded` hoặc `PaymentFailed`. Registration là nơi duy nhất xác nhận reservation hoặc giải phóng quota (quyết định 3). Đây là Saga bất đồng bộ, không có transaction phân tán. Xem [sơ đồ Payment Saga](diagrams/payment-saga-flow.md).
+
+**Hạn giữ chỗ và nhịp thời gian** (các con số này là hợp đồng, không phải hằng số tự chọn):
+
+| Đại lượng | Giá trị | Nguồn cấu hình | Ai dùng |
+|---|---|---|---|
+| Hạn `HELD` | 120 giây | `RESERVATION_HOLD_TTL_SECONDS` | Registration đặt `expires_at = now + TTL` lúc tạo reservation |
+| Mock payment tự SUCCESS | 5 giây sau khi tiêu `ReservationCreated` | `PAYMENT_MOCK_DELAY_SECONDS` | Payment |
+| Frontend poll reservation | 2000 ms | hằng số UI | trang 03 §5 |
+| Ngưỡng "chờ lâu bất thường" | `expires_at + 10s` | hằng số UI | trang 03 §5 |
+
+Bất biến cấu hình: `PAYMENT_MOCK_DELAY_SECONDS` **phải nhỏ hơn** TTL, mặc định 5 << 120 để đường happy-path không bao giờ chạm ranh giới.
+
+**Chuyện gì xảy ra khi tiền về muộn.** `ReservationCreated` mang `expires_at`, nên Payment biết hạn giữ chỗ mà không cần hỏi lại. Khi mock (hoặc `simulate`) chuẩn bị chốt `SUCCEEDED` mà `now > expires_at`, Payment **không** phát `PaymentSucceeded`: nó ghi `payments.status = SUCCEEDED`, tạo luôn một `refunds` toàn phần và phát `RefundCompleted`. Registration do đó không bao giờ nhận lệnh confirm cho một reservation đã bị worker giải phóng.
+
+Còn đúng một khoảng hẹp chưa có cơ chế tự động: reservation bị giải phóng *trước* `expires_at` (user bấm "Hủy giữ chỗ", hoặc event bị hủy) khi Payment đã kịp phát `PaymentSucceeded`. Registration gặp `PaymentSucceeded` trên reservation không còn ở `HELD` thì **ack và bỏ qua** — không xuất vé, không đổi `sold`/`reserved`, ghi log kèm `request_id`. Tiền nằm ở trạng thái thu rồi chưa hoàn và người vận hành dùng `POST /internal/payments/{id}/refund`. Hướng đóng khoảng này (thêm queue `payment.refund` bind vào `reservation.released.v1`) đang chờ cả nhóm duyệt — xem [docs/api/messaging.md §13](api/messaging.md).
+
+Khi event bị hủy, Payment tự refund 100% mọi giao dịch `SUCCEEDED` có cùng `event_id` (đường `EventCancelled`, đã có queue `payment.event-cancelled`) và Registration phát `BookingCancelled` cho từng registration để Notification gửi email (quyết định 7). Cùng handler đó áp cho giao dịch còn ở `PENDING`: chuyển thẳng sang `FAILED` và **không** phát `PaymentSucceeded`, để không có vé nào được confirm cho một event đã chết.
+
 ### 4.3 API Composition
 
 `GET /api/public/events/{slug}/details`: Gateway gọi song song Event (`event`, `organization_id`), Identity (`GET /public/organizations/{slug}`) và Registration (`availability`) rồi trả response tổng hợp. Gateway chỉ tổng hợp response, không quyết định giá/quota. Không cache tồn kho quá 5 giây. Fallback: một nguồn lỗi thì vẫn trả các phần đã có kèm `degraded: true` và `degraded_sources: ["availability"]`; chỉ trả 502 khi cả ba nguồn đều lỗi.
-
-Chỉ vé có phí đi qua saga. Với `total_amount = 0`, Registration confirm và phát vé ngay trong transaction giữ chỗ (quyết định 2), Payment không liên quan. Với vé có phí, Registration phát `ReservationCreated` sau khi giữ quota; Payment tiêu message, tạo giao dịch idempotent rồi phát `PaymentSucceeded` hoặc `PaymentFailed`. Registration là nơi duy nhất xác nhận reservation hoặc giải phóng quota (quyết định 3). Nếu `PaymentSucceeded` đến muộn sau khi reservation hết hạn, Payment refund cho giao dịch đã thành công. Khi event bị hủy, Payment tự refund 100% và Registration phát `BookingCancelled` để Notification gửi email (quyết định 7). Đây là Saga bất đồng bộ, không có transaction phân tán. Xem [sơ đồ Payment Saga](diagrams/payment-saga-flow.md).
 
 ## 5. Docker Compose và vận hành local
 
@@ -204,19 +240,21 @@ Identity M3 được duyệt riêng theo [ADR 0005](adr/0005-m3-outbox-delivery.
 
 Compose gốc cần có Gateway, năm service, năm PostgreSQL database/volume độc lập, RabbitMQ và Mailpit. Chỉ Gateway expose cổng public; service và database nằm trong network riêng. Mỗi service tự chạy migration của database mình. Dùng healthcheck, biến môi trường trong `.env` (không commit secret), và Docker named volume riêng.
 
-| Thành phần | Cổng trên host | Ghi chú |
-|---|---|---|
-| API Gateway | 8080 | ingress public duy nhất cho frontend |
-| identity-service | không expose | 8080 trong network `backend` |
-| event-service | không expose | 8080 trong network `backend` |
-| registration-service | không expose | 8080 trong network `backend` |
-| payment-service | không expose | 8080 trong network `backend` |
-| notification-service | không expose | 8080 trong network `backend` |
-| RabbitMQ | 5672, 15672 | 15672 là management UI |
-| Mailpit | 1025, 8025 | 1025 SMTP, 8025 xem mail |
-| 5 PostgreSQL | không expose | mỗi database một named volume |
+| Thành phần | Publish ra host | Chỉ trong network `backend` | Ghi chú |
+|---|---|---|---|
+| API Gateway | 8080 | 8080 | ingress public duy nhất cho frontend |
+| identity-service | không | 8080 | Gateway gọi theo tên service |
+| event-service | không | 8080 | |
+| registration-service | không | 8080 | |
+| payment-service | không | 8080 | |
+| notification-service | không | 8080 | |
+| RabbitMQ | 15672 | 5672 | 5672 là cổng AMQP mà năm service dùng; **không** publish, nên cấu hình local dev phải trỏ `rabbitmq:5672` chứ không phải `localhost:5672`. 15672 là management UI |
+| Mailpit | 8025 | 1025 | 1025 SMTP cho Notification; 8025 là web UI xem mail trong demo |
+| 5 PostgreSQL | không | 5432 | mỗi database một named volume |
 
-Biến môi trường dùng chung: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `PAYMENT_PROVIDER_MODE`, `PAYMENT_MOCK_DELAY_SECONDS`, `SMTP_HOST`, `SMTP_PORT`.
+**Trạng thái hiện tại của `docker-compose.yml`:** mới có 5 PostgreSQL + RabbitMQ (chỉ publish 15672). Gateway, năm service và Mailpit chưa có build target — tuần 1 của §6 là lúc bổ sung. Bảng trên là đích phải tới, không phải mô tả file hiện tại.
+
+Biến môi trường dùng chung: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `PAYMENT_PROVIDER_MODE`, `PAYMENT_MOCK_DELAY_SECONDS`, `RESERVATION_HOLD_TTL_SECONDS`, `SMTP_HOST`, `SMTP_PORT`. Giá trị local và ý nghĩa từng key nằm trong `.env.example` (repo chỉ commit file mẫu; `.env` thật không commit). Nhịp thời gian giữa các key ở §4.2.
 
 Lệnh dự kiến: `docker compose up --build`, `docker compose down`.
 

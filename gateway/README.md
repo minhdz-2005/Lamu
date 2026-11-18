@@ -1,18 +1,54 @@
 # API Gateway
 
-Cổng truy cập duy nhất cho frontend: xác thực JWT, định tuyến, rate limit và API Composition. Gateway không sở hữu dữ liệu nghiệp vụ.
+Một câu: **cửa duy nhất** mà giao diện web được phép gõ; bên trong có năm service thì bên ngoài chỉ thấy một cổng. Cổng này chạy ở `8080` và là thành phần duy nhất expose ra ngoài.
 
-Cập nhật P8 14/11/2026: implementation hiện proxy allowlist **Identity HTTP1.2.0**; API Composition/Event/Registration/Payment/Notification trong kiến trúc chưa có route thật ở Gateway. [Báo cáo P8](../services/identity-service/report/REPORT_P8_INTEGRATION_HANDOFF_01.md) có lượt kiểm chứng mới, [handoff](../docs/integration/identity-handoff.md) có mapping browser/logout/H01–H05. Frontend default `/api` hiện vẫn Next mock; chọn Gateway base có `/api` đúng một lần và chốt same-origin/CORS/transport trước M4. P8 không sửa frontend hoặc bật CORS. Event resolver [DRAFT](../shared/contracts/http/event-context.draft.openapi.json) không thuộc projection public.
+Cổng vào **không sở hữu dữ liệu nghiệp vụ**: không tự quyết định giá, chỗ còn lại, trạng thái sự kiện hay quyền hạn.
 
-P5 thêm allowlist POST/GET organizations, GET members, PUT member roles và GET public organization; route protected dùng cùng JwtGuard M1. Chỉ mutation P5 forward một Idempotency-Key hợp lệ; query pagination giữ nguyên cho Identity validate. Hai endpoint `/internal/` chỉ ở Identity, bị loại khỏi projection Swagger và không có route Gateway. [ADR 0003](../docs/adr/0003-m2-p5-organization-rbac.md) và canonical HTTP v1.1.0 ghi contract được duyệt; P6 được triển khai riêng theo ADR 0004 và canonical v1.2.0.
+## Phần này lo gì
 
-M1 có register/login/refresh/logout và `/api/users/me`; API Composition và các route service nghiệp vụ chưa thuộc M1. Xem [runbook Identity/Gateway](../services/identity-service/README.md) cho cấu hình/chạy/test.
+- Chuyển tiếp mọi request công khai xuống đúng service sở hữu, kèm danh tính đã được xác minh.
+- Xác minh thẻ đăng nhập: chữ ký, nơi phát hành, đối tượng dùng, hạn dùng. Service bên trong không tự kiểm chữ ký nữa.
+- Tập hợp câu trả lời nằm rải rác ở nhiều service thành một response duy nhất cho một màn hình.
+- Trả lời bằng một khuôn lỗi thống nhất cho toàn hệ thống, kèm mã để giao diện dịch sang tiếng Việt.
+- Ghi dấu vết yêu cầu để một lượt đặt vé lần ra được ở cả năm service.
 
-NestJS app build riêng: `npm run build -w @lamu/gateway`; image riêng từ `gateway/Dockerfile`. Public port mặc định loopback 8080, có thể cấu hình GATEWAY_BIND/GATEWAY_PORT. IDENTITY_URL là địa chỉ nội bộ; JWT_SECRET/ISSUER/AUDIENCE khớp Identity, timeout mặc định 3000ms. Không truy cập identity_db.
+## Nguyên tắc cứng
 
-Swagger `/docs`, JSON `/docs-json` dùng [contract projection](../shared/contracts/http/gateway.openapi.json) từ canonical Identity OpenAPI. Endpoint ngoài allowlist, health Identity và `/internal/...` không được proxy. Public client chỉ gửi Bearer token; Gateway tự cấp X-User-Id/X-Session-Id từ claims verified, loại toàn bộ context client qua allowlist, từ chối Authorization trùng ở raw headers. JWT cố định HS256, issuer/audience/expiry/claim shape và lifetime 900. Request ID UUID được giữ hoặc sinh mới xuyên request. Không retry mutation khi 502/504.
+- Không route nào mở đường cho frontend chạm thẳng vào cổng service hoặc database nào khác.
+- Không endpoint nội bộ nào (`/internal/...`) được đi qua cổng vào.
+- Không quyết định nghiệp vụ: chỉ chuyển và tập hợp.
+- Một nguồn dữ liệu lỗi thì vẫn trả những phần đã có, đánh dấu phần thiếu; chỉ báo lỗi cả trang khi cả ba nguồn đều hỏng.
+- Chỗ còn lại không được cache lâu quá năm giây.
 
-Runtime chạy user node, không chứa Jest/tsx. Log chỉ gồm request_id/method/status/duration_ms, không body/header/token/URL query. Rate limit local theo IP, auth nghiêm hơn general; không có distributed limit. Không tự bật CORS rộng hoặc trust proxy. Browser frontend thật và cookie policy thuộc M4; local network trust không thay xác thực service-to-service khi triển khai ngoài local.
+## API phải cung cấp
 
+Nguồn hợp đồng là [docs/api/catalog.md](../docs/api/catalog.md). Bảng này không định nghĩa API mới.
 
-P6 allowlist thêm năm route create/list/accept/decline/revoke invitation theo canonical; JwtGuard áp dụng cả năm, bốn POST forward một Idempotency-Key hợp lệ, list forward query để Identity validate. Không wildcard/internal route. Swagger /docs-json là projection v1.2.0. Flow container: `node scripts/compose-smoke.cjs --p6`, artifact M2_P6 riêng. Manual Swagger/DOC-01 M2: PASS — USER-CONFIRMED, xem [nghiệm thu](../services/identity-service/report/REPORT_M2_ACCEPTANCE_01.md).
+### Hai endpoint tự tổng hợp
+
+| API | Dùng để làm gì | Nguồn dữ liệu ghép lại |
+|---|---|---|
+| `GET /api/public/events/{slug}/details` | Trang chi tiết sự kiện, frontend chỉ cần một request | Sự kiện + Hồ sơ & quyền hạn (tên ban tổ chức) + Vé (chỗ còn từng loại) |
+| `GET /api/users/me/dashboard` | Vé sắp tới của tôi + sự kiện tôi quản lý | Vé & chỗ ngồi + Sự kiện |
+
+Quy tắc dự phòng: nguồn nào lỗi thì key đó trả `null`, kèm `degraded: true` và tên nguồn trong `degraded_sources`; chỉ báo 502 khi cả ba nguồn cùng lỗi.
+
+### Bảng chuyển tiếp
+
+| Tiền tố công khai | Chuyển tới service |
+|---|---|
+| `/api/auth/...`, `/api/users/me`, `/api/organizations/...`, `/api/public/organizations/...` | Identity & Organization |
+| `/api/events` (GET chi tiết, tạo, sửa, publish, cancel), `/api/organizations/{orgId}/events`, `/api/public/events` | Event |
+| `/api/events/{id}/ticket-types`, `/api/events/{id}/availability`, `/api/events/{id}/tickets`, `/api/events/{id}/reservations`, `/api/ticket-types/{id}`, `/api/reservations/...`, `/api/tickets/check-in`, `/api/users/me/tickets` | Registration & Ticketing |
+| `/internal/...` của Payment và Notification | **Không route.** Trong bản MUST, frontend không có màn hình nào chạm hai service này |
+
+Chỗ dễ đi sai: hai service Event và Registration cùng dùng đường dẫn bắt đầu bằng `/api/events/...`. Điểm phân biệt là đoạn con `ticket-types`, `availability`, `reservations`, `tickets` — bảng trên đã chốt từng đường, và `PATCH /api/ticket-types/{id}` (số ít, không có tiền tố event) thuộc Registration. Thêm endpoint mới dưới `/api/events/...` là phải sửa bảng này trong cùng PR, nếu không vé sẽ bị gửi nhầm sang service sự kiện. Cùng một kiểu: `/api/users/me` thuộc service hồ sơ, còn `/api/users/me/tickets` thuộc service vé.
+
+Chưa làm trong 4 tuần (STRETCH): giới hạn tần suất request phân tán, cache, mạch ngắt khi một service chết.
+
+## Việc còn treo trước khi đóng băng
+
+1. Chưa có tài liệu định nghĩa endpoint sống của chính cổng vào; quy ước hiện tại chỉ nói năm service có `GET /healthz` và **không** đi qua cổng. Cần chốt để Docker kiểm tra được cổng (đề xuất cùng kiểu: `GET /healthz` không route qua chính nó).
+2. Danh sách 10 mã quyền và 4 chức danh phải được Identity và Event duyệt chung; cổng vào không liên quan tới quyết định này nhưng mọi service khác thì có.
+
+Đã chốt: tên thông báo, routing key, exchange, hàng đợi và quy tắc ack/nack nằm ở [docs/api/messaging.md](../docs/api/messaging.md). Cổng vào không tiêu message nào — nó chỉ chuyển và ghép — nhưng vẫn cần đọc tài liệu đó để biết `correlation_id` lấy từ `X-Request-Id` (mục 5).

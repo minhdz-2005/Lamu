@@ -34,6 +34,8 @@ Mục tiêu: một trang trả lời đủ "event này là gì, còn vé không,
 | `TicketTypeRow` | `item`, `qty`, `onQtyChange` | checkbox/số lượng |
 | `ReservationStatus` | `reservation` | HELD / CONFIRMED / RELEASED + countdown + link vé |
 
+Bản code đang tách khu phải thành **hai card** — card trên là danh mục loại vé (luôn còn để mua lượt kế), card dưới là trạng thái `cart / held / success / failed` (xem [reports/03](reports/03-event-detail-and-booking.md)). Wireframe trên mô tả một panel sticky gộp; chọn kiểu nào là quyết định trình bày của người làm màn hình, **hợp đồng API và các luật ở §3–§6 không đổi**.
+
 ## 2. Load trang
 
 `GET /api/public/events/{slug}/details` một lần, không gọi `GET /public/events/{slug}` riêng (composition đã gộp `event` + `organization` + `availability`; shape và `degraded_sources` xem catalog §6).

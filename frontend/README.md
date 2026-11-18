@@ -22,7 +22,7 @@ Tài khoản demo (mật khẩu `password123`):
 |---|---|---|
 | `demo@luma.dev` | OWNER của Luma Studio | trang 05: tạo/publish/hủy event, thêm loại vé, check-in |
 | `khach@luma.dev` | khách vãng lai | trang 03/04: giữ chỗ, vé, hoàn tiền khi event bị hủy |
-| `speaker@luma.dev` | SPEAKER (chỉ `event.read`) | nhánh quyền: mọi nút ghi ẩn, tab Check-in không hiện |
+| `speaker@luma.dev` | SPEAKER (chỉ `event.read`) | nhánh quyền: mọi nút ghi ẩn, tab Check-in không hiện. Chỉ đúng với mock — xem "Chỗ mock lệch hợp đồng" |
 
 ## Nối Gateway thật
 
@@ -45,6 +45,18 @@ Local topology Next → Gateway loopback: giữ `GATEWAY_TRUSTED_PROXY_CIDRS` tr
 Release: readiness DB/Identity/Gateway/mail → transport allowlist → session/coordinator → UI → build real và nghiệm thu. Khi readiness/routing/rotation sai, dừng real và rebuild mock; reload mọi tab. Xóa namespace real nếu muốn bỏ phiên local; không đưa token sang namespace mock. Code/config rollback không hoàn tác password đã đổi, token rotation hoặc session đã revoke.
 
 Kiểm chứng local: `npm test` trong frontend; từ repo root chạy `node scripts/frontend-auth-rollback.cjs` (build mock → browser demo với Gateway down → khôi phục build real). E2E thật: build frontend với `NEXT_PUBLIC_AUTH_MODE=real`, sau đó `node scripts/test-db.cjs --migrate --seed --security --runTestsByPath tests/frontend-auth-browser.spec.ts`. Runner tạo DB/Mailpit riêng và xóa đúng container đó; không dùng DB shared hay SMTP ngoài. Cần Chrome local và dependency root/frontend đã cài. [Báo cáo triển khai](../services/identity-service/report/REPORT_FRONTEND_AUTH_INTEGRATION_01.md) phân biệt test thật và fault fixtures.
+
+## Chỗ mock lệch hợp đồng (đọc trước khi nối Gateway thật)
+
+Mock viết trước khi catalog chốt, nên ba chỗ dưới đây **đúng với mock nhưng sai với API thật**. UI phải giữ nhánh xử lý lỗi thật (403/404), đừng bỏ vì "mock không bao giờ trả thế".
+
+| Mock làm gì | Hợp đồng thật nói gì | Bằng chứng | Liên quan |
+|---|---|---|---|
+| `GET /public/events` trả cả `PUBLISHED` lẫn `CANCELLED` | Chỉ trả `PUBLISHED` | `src/app/api/[...path]/route.ts:301` vs [catalog §2](../docs/api/catalog.md) | 02 §6 |
+| Role `SPEAKER` có `event.read` cấp tổ chức, nên xem được lịch event của org | `SPEAKER` là chức danh cấp **event**; `GET /organizations/{orgId}/events` cần `event.read` cấp **org** → 403, sang organizer không thấy gì | `src/features/organizer/rights.ts:16`, `src/mock/store.ts:166` vs [kiến trúc §3.1.1](../docs/architecture.md) | 05 §1, §7 |
+| Hạn giữ chỗ là hằng số `HOLD_SECONDS = 120` trong file | `RESERVATION_HOLD_TTL_SECONDS` (mặc định 120) đọc từ môi trường Registration | `src/mock/store.ts` vs [kiến trúc §4.2](../docs/architecture.md) | 03 §5 |
+
+Hai dòng đầu là quyết định nghiệp vụ, không phải bug tình cờ: nếu muốn giữ hành vi mock, phải sửa migration seed của Identity và catalog — lúc đó sửa luôn tài liệu UI, không để hai phía lệch nhau.
 
 ## Knob demo
 

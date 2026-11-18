@@ -12,7 +12,8 @@ Mục tiêu: user công khai tìm được event đang mở bán và bấm vào 
 +------------------------------------------------+
 |  Tìm sự kiện                                    |
 |  [ thanh tìm kiếm ...........................]  |
-|  [ Từ ngày: yyyy-mm-dd ] [ Lọc ] [ Xóa lọc ]    |
+|  ( Mọi ngày )( Từ hôm nay )( Sau 7 ngày )       |
+|  [ Từ ngày: yyyy-mm-dd ] [ Áp dụng ] [ Xóa lọc ]|
 +------------------------------------------------+
 |  Kết quả: 37 sự kiện            (hàng kết quả)  |
 |  +--------------+  +--------------+  +--------+ |
@@ -33,7 +34,8 @@ Mục tiêu: user công khai tìm được event đang mở bán và bấm vào 
 | `EventListPage` | — | sở hữu `query`, `fromDate`, `page`, `pageSize`, `result` |
 | `SearchBar` | `value`, `onSubmit`, `onClear` | debounce 300 ms, submit bằng Enter |
 | `DateFromFilter` | `value`, `onChange` | `type="date"`, không cho ngày quá 1 năm trước hôm nay |
-| `EventCard` | `event: {id, slug, title, starts_at, organization_slug}` | link `/events/{slug}`; toàn card bấm được |
+| `DateQuickChips` | `value`, `onChange` | ba chip radio "Mọi ngày" (xóa `from`), "Từ hôm nay" (`from = hôm nay`), "Sau 7 ngày" (`from = hôm nay + 7`); chip đang chọn sáng nền; bấm chip chỉ đổi `from`, **không** tự submit — user vẫn bấm "Áp dụng" |
+| `EventCard` | `event: {id, slug, title, starts_at, organization_slug}` | link `/events/{slug}`; toàn card bấm được; dải accent trên đỉnh và dòng "Xem chi tiết →" là CTA thuần CSS, không phải field API |
 | `Pager` | `total`, `page`, `pageSize`, `onChange` | chỉ hiện khi `total > pageSize` |
 
 ## 2. Gọi API
@@ -92,7 +94,7 @@ Không tự bịa field (`price`, `available`, `image`) ở trang này; catalog 
 | User paste link `?page=999` | Tính `offset` vượt → đối xử như §6.1 |
 | `q` chỉ có khoảng trắng | Không gửi `q`, coi như không lọc |
 | Mất mạng khi đang đổi trang | ErrorState, **giữ dữ liệu trang cũ** để user không thấy trang trắng |
-| Event bị cancel sau khi user xem list | Trang 03 mới là nơi hiện trạng thật (`GET /public/events/{slug}` trả 404 nếu chưa PUBLISHED, event CANCELLED → see 03 §6) |
+| Event bị cancel sau khi user xem list | Không còn cách nào thấy ở trang này: `GET /public/events` chỉ trả `PUBLISHED` (catalog §2), nên trang tự mất card sau lần refetch kế. Ai giữ link sâu vẫn vào được trang 03, nơi đó hiện banner hủy và panel disabled (03 §2, §3) |
 
 ## 7. Checklist nghiệm thu
 

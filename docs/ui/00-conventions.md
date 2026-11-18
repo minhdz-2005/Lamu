@@ -6,7 +6,7 @@
 
 | Quy ước | Chốt |
 |---|---|
-| Base URL | Frontend Next hiện dùng `NEXT_PUBLIC_API_BASE_URL`, mặc định `/api` đang trỏ mock. Thiết kế M4 dùng `/api` qua same-origin proxy tới Gateway hoặc full Gateway URL có `/api` đúng một lần; transport/CORS cần chốt§14 trước implementation. Không chỉ đổi URL rồi giả mọi route business đã có. |
+| Base URL | `NEXT_PUBLIC_API_BASE_URL`, mặc định rỗng = gọi `/api` cùng origin (mock gateway trong `src/app/api/[...path]/route.ts`). Khi Gateway thật chạy: `http://localhost:8080/api`. Frontend chỉ biết đúng một origin đó. |
 | Đường dẫn | Bằng đường dẫn trong catalog, nối sau `/api`. Ví dụ catalog `POST /events/{id}/reservations` → gọi `POST /api/events/{id}/reservations`. |
 | Cấm | Không gọi thẳng cổng service (8081…8085), không gọi endpoint `/internal/...`, không tự suy đoán field chưa có trong catalog. |
 | Response envelope | Success: JSON thô như catalog. Error: `{"error": {"code", "message", "request_id"}}`. |

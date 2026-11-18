@@ -8,11 +8,12 @@ Mục tiêu: khách thấy vé mình đã có, đọc được `code` để đư
 
 ```text
 +------------------------------------------------+
-| Vé của tôi            [Lọc: Tất cả ▾] [Tải lại] |
+| Vé của tôi                            [Tải lại]|
+| (Tất cả)(Sắp diễn ra)(Đã check-in)(Đã hủy)     |
 +------------------------------------------------+
 |  +---- TicketCard (max-width 520px, 1 cột) ----+ |
 |  |  TECH CONF 2026                    [Còn hiệu lực] |
-|  |  14:30 · 01/12/2026 (GMT+7) · Nhà A          | |
+|  |  14:30 · 01/12/2026 (GMT+7)              | |
 |  |  Loại vé: Early                               | |
 |  |  +----------- CODE KHỔ LỚN ----------------+  ||
 |  |  |  LUMA-7F3A-91C4        [sao chép]       |  ||
@@ -29,7 +30,7 @@ Mục tiêu: khách thấy vé mình đã có, đọc được `code` để đư
 | Component | Props | Ghi chú |
 |---|---|---|
 | `MyTicketsPage` | — | sở hữu `tickets`, `filter`, `loading` |
-| `TicketFilter` | `value`, `onChange` | `ALL` / `UPCOMING` / `USED` / `VOIDED` |
+| `TicketFilter` | `value`, `onChange` | hàng chip một chạm, không phải dropdown. Bốn nhóm và cách chia (đếm ngay trên nhãn chip): `ALL` = mọi vé; `UPCOMING` = `status = ISSUED` **và** `event_starts_at ≥ now`; `USED` = `status = USED`; `VOIDED` = `status = VOIDED`. Nhãn chip: "Tất cả" / "Sắp diễn ra" / "Đã check-in" / "Đã hủy" |
 | `TicketCard` | `ticket`, `onPrint`, `onCopy` | một vé = một card; **không** gộp hai vé cùng event thành một card |
 | `TicketCode` | `code` | font monospace, ≥ 24px, select-to-copy + nút sao chép |
 | `StatusBadge` | `status`, `event_status` | xem bảng §3 |
@@ -49,6 +50,7 @@ GET /api/users/me/tickets    -> [{ticket_id, code, event_id, event_title, event_
 | Phân trang | API không phân trang ở MUST → render toàn bộ; cảnh báo dev nếu `length > 200` |
 | Cache | Không cache quá 30 giây; refetch khi route focus lại |
 | `event_*` | luôn lấy từ payload ticket (Registration chiếu từ `event_snapshot`), **không** gọi `GET /api/public/events/{slug}` cho từng vé |
+| Không có địa điểm | `GET /users/me/tickets` không trả field venue nào (catalog §3) → card **không** có dòng địa điểm. Đừng gọi thêm API để bù, cũng đừng bịa field |
 | Link "Xem sự kiện" | `/events/{event_slug}`; nếu `event_status = CANCELLED` vẫn cho bấm (trang 03 hiện banner hủy) |
 
 ## 3. Badge trạng thái

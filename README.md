@@ -2,9 +2,17 @@
 
 Nền tảng quản lý sự kiện theo Microservices: tổ chức, sự kiện, RBAC đa cấp và đăng ký vé có kiểm soát đồng thời.
 
+Hào - identity service,
+Ngân - event service,
+Hậu - notification service,
+Thảo - payment service,
+minh - registration service,
+
 ## Tài liệu
 - [Kiến trúc và kế hoạch tổng thể](architecture.md)
 - [Danh mục API năm service](docs/api/catalog.md)
+- [Hợp đồng thông báo: exchange, queue, routing key](docs/api/messaging.md)
+- [Quy tắc nghiệp vụ và định dạng field](docs/business-rules.md)
 - [Tài liệu giao diện — 5 trang MUST](docs/ui/README.md)
 - [Tài liệu dự án](docs/README.md)
 

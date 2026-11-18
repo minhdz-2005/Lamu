@@ -46,7 +46,7 @@ Lộ trình01 →02 →03 →04 →05 là kế hoạch UI toàn hệ thống tr�
 | `/organizations/[orgId]` | `GET /organizations/{orgId}`, `GET /organizations/{orgId}/members`, `PUT /organizations/{orgId}/members/{userId}/roles`, `POST /organizations/{orgId}/members/invitations`, `POST /organizations/{orgId}/members/invitations/{id}/revoke`; refetch `GET /users/me` khi cần |
 | `/me/invitations` | `GET /users/me/invitations`, `POST /users/me/invitations/{id}/accept`, `POST /users/me/invitations/{id}/decline`; refetch `GET /users/me` sau accept |
 | `/events` | `GET /public/events` |
-| `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}` |
+| `/events/[slug]` | `GET /public/events/{slug}/details` (composition), `POST /events/{eventId}/reservations`, `GET /reservations/{reservationId}`, `DELETE /reservations/{reservationId}`, và **một** `GET /users/me/tickets` ngay khi poll thấy `CONFIRMED` để lấy `code` (03 §5) |
 | `/me/tickets` | `GET /users/me`, `GET /users/me/tickets` |
 | `/organizer` | `GET /users/me`, `POST /organizations`, `POST /events`, `GET /organizations/{orgId}/events`, `POST /events/{id}/publish`, `POST /events/{id}/cancel`, `POST /events/{id}/ticket-types`, `GET /events/{id}/availability`, `GET /events/{id}/tickets`, `POST /tickets/check-in` |
 
