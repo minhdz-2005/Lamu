@@ -2,7 +2,8 @@
 // năm service thật tồn tại. Chỉ route handler được import file này (server-side).
 // Quy tắc nghiệp vụ lấy từ docs/architecture.md §1.1 (8 quyết định) và §4.2.
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import type { Avatar } from "@/lib/types";
 
 export const HOLD_SECONDS = 120;
 export const PAYMENT_DELAY_SECONDS = Number(process.env.NEXT_PUBLIC_MOCK_PAYMENT_DELAY_SECONDS ?? 5);
@@ -11,8 +12,8 @@ export interface User {
   id: string;
   email: string;
   display_name: string;
-  /** Mock local so sánh trực tiếp; bản thật do Identity service băm bằng bcrypt/argon2. */
-  password: string;
+  password_hash: string;
+  avatar?: Avatar;
   status: "ACTIVE" | "LOCKED";
 }
 
@@ -20,6 +21,8 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
+  description?: string | null;
+  cover?: Avatar;
   created_by: string;
 }
 
@@ -124,9 +127,19 @@ export interface Refund {
 }
 
 interface Session {
+  id: string;
   token_hash: string;
   user_id: string;
   revoked_at: string | null;
+}
+
+interface AvatarIntent {
+  userId: string;
+  orgId?: string;
+  revision: string;
+  expiresAt: number;
+  image?: File;
+  committed?: Avatar;
 }
 
 interface Store {
@@ -142,11 +155,14 @@ interface Store {
   payments: Record<string, { reservation_id: string; event_id: string; amount: string; status: string }>;
   refunds: Refund[];
   sessions: Session[];
+  avatarIntents: Map<string, AvatarIntent>;
+  passwordAttempts: Map<string, { window: number; count: number }>;
   idempotency: Record<string, string>;
 }
 
 export const PERMISSIONS = [
   "org.read",
+  "org.profile.update",
   "org.member.read",
   "org.member.manage",
   "event.create",
@@ -169,6 +185,16 @@ export function rolePermissions(role: string): readonly string[] {
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function mockPasswordHash(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  return salt + ":" + scryptSync(password, salt, 32).toString("hex");
+}
+
+export function verifyMockPassword(user: User, password: string) {
+  const [salt, digest] = user.password_hash.split(":");
+  return timingSafeEqual(scryptSync(password, salt, 32), Buffer.from(digest, "hex"));
 }
 
 function iso(date: Date): string {
@@ -202,11 +228,14 @@ function seed(): Store {
 
   const store: Store = {
     users: [
-      { id: ownerId, email: "demo@luma.dev", display_name: "Chủ tọa demo", password: "password123", status: "ACTIVE" },
-      { id: attendeeId, email: "khach@luma.dev", display_name: "Khách tham dự", password: "password123", status: "ACTIVE" },
-      { id: speakerId, email: "speaker@luma.dev", display_name: "Diễn giả chỉ đọc", password: "password123", status: "ACTIVE" },
+      { id: ownerId, email: "demo@luma.dev", display_name: "Chủ tọa demo", password_hash: mockPasswordHash("password123"), status: "ACTIVE" },
+      { id: attendeeId, email: "khach@luma.dev", display_name: "Khách tham dự", password_hash: mockPasswordHash("password123"), status: "ACTIVE" },
+      { id: speakerId, email: "speaker@luma.dev", display_name: "Diễn giả chỉ đọc", password_hash: mockPasswordHash("password123"), status: "ACTIVE" },
     ],
-    organizations: [{ id: orgId, name: "Luma Studio", slug: "luma", created_by: ownerId }],
+    organizations: [{
+      id: orgId, name: "Luma Studio", slug: "luma", created_by: ownerId,
+      description: null, cover: { url: null, revision: "0" },
+    }],
     memberships: [
       { id: randomUUID(), organization_id: orgId, user_id: ownerId, status: "ACTIVE", roles: ["OWNER"] },
       { id: randomUUID(), organization_id: orgId, user_id: speakerId, status: "ACTIVE", roles: ["SPEAKER"] },
@@ -257,6 +286,8 @@ function seed(): Store {
     payments: {},
     refunds: [],
     sessions: [],
+    avatarIntents: new Map(),
+    passwordAttempts: new Map(),
     idempotency: {},
   };
 
@@ -316,16 +347,17 @@ export function findUserByToken(authorization?: string | null): User | null {
   const store = db();
   if (!authorization?.startsWith("Bearer ")) return null;
   const token = authorization.slice(7);
-  const userId = token.startsWith("at_") ? token.slice(3).split(".")[0] : null;
-  if (!userId) return null;
-  return store.users.find((u) => u.id === userId) ?? null;
+  if (!token.startsWith("at_")) return null;
+  const session = store.sessions.find((s) => s.id === token.slice(3) && !s.revoked_at);
+  return store.users.find((u) => u.id === session?.user_id && u.status === "ACTIVE") ?? null;
 }
 
 export function issueTokens(user: User): { access_token: string; refresh_token: string; expires_in: number } {
   const store = db();
   const refresh = `rt_${user.id}_${randomUUID()}`;
-  store.sessions.push({ token_hash: hash(refresh), user_id: user.id, revoked_at: null });
-  return { access_token: `at_${user.id}`, refresh_token: refresh, expires_in: 900 };
+  const id = randomUUID();
+  store.sessions.push({ id, token_hash: hash(refresh), user_id: user.id, revoked_at: null });
+  return { access_token: `at_${id}`, refresh_token: refresh, expires_in: 900 };
 }
 
 export function consumeRefresh(refreshToken: string): User | null {

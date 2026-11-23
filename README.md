@@ -23,6 +23,6 @@ minh - registration service,
 - REST cho truy vấn/lệnh cần phản hồi ngay; RabbitMQ cho sự kiện nghiệp vụ bất đồng bộ.
 - Chạy hạ tầng local từ `docker-compose.yml` ở thư mục gốc.
 
-> Đây là bộ khung tài liệu và thư mục. Các service chưa có mã nguồn triển khai.
+Identity/Gateway M1 đã có backend và hướng dẫn chạy tại [Identity README](services/identity-service/README.md), kết quả tại [báo cáo M1](services/identity-service/report/REPORT_M1_AUTH_GATEWAY_01.md). Các service nghiệp vụ khác và tích hợp frontend vẫn theo mốc sau trong kế hoạch.
 
 

@@ -1,0 +1,29 @@
+{
+  "scope": "M1 working tree; no commit by user request",
+  "artifacts": {
+    "shared/contracts/http/identity.openapi.json": {
+      "sha256": "f62260d7c8ea427c9e3f2192193f50eacc3052ae3c8191a8eb835c576deefb76"
+    },
+    "shared/contracts/http/gateway.openapi.json": {
+      "sha256": "c077723c53397c080eb0cc05fd4d62be4115edf57a0be0bd58285e2fb937fa50"
+    },
+    "shared/contracts/events/user-registered.v1.schema.json": {
+      "sha256": "e8c78c518725f9af616ab582aebc211699926b61137000cb76d56d13e9002613"
+    },
+    "shared/contracts/http/generated/identity.d.ts": {
+      "sha256": "c07e72de9c4331288700d4a5c9fd4e87a3295a07f71a39c231652fabb2a36b66"
+    },
+    "package-lock.json": {
+      "sha256": "6e00de8911a18ff2bbae347246980a6948e73abf810e323b7ec9b0cc1ee24e26"
+    },
+    "tsconfig.base.json": {
+      "sha256": "8ca866422066da6466298686c664ee47e380bfad5ca4e08025aac526ada842f8"
+    },
+    "tsconfig.tests.json": {
+      "sha256": "dc4628c7ddaab1d2f67b7394f4ab1a27cb4acd602108b0aae2d73b64cc581280"
+    },
+    "package.json": {
+      "sha256": "743827f7da01ca1b216183fdb6f5c86c39cf83814dec7a79a7e0f6155dc903f4"
+    }
+  }
+}

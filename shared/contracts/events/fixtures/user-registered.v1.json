@@ -1,0 +1,14 @@
+{
+  "event_id": "10000000-0000-4000-8000-000000000001",
+  "event_type": "UserRegistered",
+  "version": 1,
+  "occurred_at": "2026-11-13T04:00:00Z",
+  "aggregate_type": "user",
+  "aggregate_id": "20000000-0000-4000-8000-000000000001",
+  "producer": "identity-service",
+  "payload": {
+    "user_id": "20000000-0000-4000-8000-000000000001",
+    "email": "fixture@example.test",
+    "display_name": "Fixture"
+  }
+}

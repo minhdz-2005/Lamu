@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MembershipChanged v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "version",
+    "occurred_at",
+    "aggregate_type",
+    "aggregate_id",
+    "producer",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "const": "MembershipChanged"
+    },
+    "version": {
+      "const": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "aggregate_type": {
+      "const": "membership"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "producer": {
+      "const": "identity-service"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "membership_id",
+        "organization_id",
+        "user_id",
+        "status",
+        "membership_revision",
+        "change_type",
+        "roles"
+      ],
+      "properties": {
+        "membership_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "organization_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "user_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ACTIVE"
+        },
+        "membership_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "change_type": {
+          "enum": [
+            "CREATED",
+            "ROLES_REPLACED"
+          ]
+        },
+        "roles": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "resource_type",
+              "resource_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "OWNER",
+                  "ADMIN",
+                  "SPEAKER",
+                  "ATTENDEE"
+                ]
+              },
+              "resource_type": {
+                "type": "string",
+                "enum": [
+                  "ORG",
+                  "EVENT"
+                ]
+              },
+              "resource_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "OWNER",
+                      "ADMIN"
+                    ]
+                  },
+                  "resource_type": {
+                    "enum": [
+                      "ORG"
+                    ]
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "SPEAKER",
+                      "ATTENDEE"
+                    ]
+                  },
+                  "resource_type": {
+                    "enum": [
+                      "EVENT"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "ORG resource_id equals target organization_id (stored NULL internally). EVENT resource_id must resolve to the target org. UUIDs canonical lowercase."
+          }
+        }
+      }
+    }
+  }
+}

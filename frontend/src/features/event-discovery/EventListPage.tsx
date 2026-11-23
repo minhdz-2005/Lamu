@@ -41,7 +41,7 @@ export function EventListPage() {
   const [qInput, setQInput] = useState(q);
   const [fromDraft, setFromDraft] = useState(from.slice(0, 10));
   const [result, setResult] = useState<Paged<PublicEventListItem> | null>(null);
-  const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const seq = useRef(0);
@@ -214,7 +214,7 @@ export function EventListPage() {
         <PageSizePicker value={size} onChange={(next) => writeUrl({ size: next, page: 1 })} />
       </div>
 
-      {error && <ErrorState message={error.message} requestId={error.requestId} onRetry={() => void load()} />}
+      {error && <ErrorState message={error.message} onRetry={() => void load()} />}
 
       {booting ? (
         <div className="grid grid-3">

@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { AuthHeader } from "@/features/auth/AuthHeader";
+import { AccountHeader } from "@/features/account/AccountHeader";
+import { useSignOut } from "@/features/account/useSignOut";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -35,7 +38,18 @@ function SunIcon() {
 
 export function Header() {
   const pathname = usePathname();
-  const { state, profile, organizations, logout } = useSession();
+  if (pathname === "/me") return null;
+  if (pathname === "/me/invitations") return <AccountHeader activeHref="/me/invitations" />;
+  if (pathname === "/organizations") return <AccountHeader activeHref="/organizations" />;
+  if (/^\/organizations\/[^/]+$/.test(pathname)) return <AccountHeader activeHref="/organizations" />;
+  return <SiteHeader />;
+}
+
+function SiteHeader() {
+  const pathname = usePathname();
+  const session = useSession();
+  const { state, profile, organizations } = session;
+  const { signOut, loggingOut, notice } = useSignOut(session);
   const [theme, setTheme] = useState<Theme | null>(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -65,6 +79,8 @@ export function Header() {
     : isOrganizer
       ? { href: "/organizer?tab=sell", label: "Bán vé", variant: "btn-primary" }
       : { href: "/organizer", label: "Tổ chức sự kiện", variant: "btn-primary" };
+
+  if (pathname === "/auth") return <AuthHeader theme={theme} onToggleTheme={toggleTheme} />;
 
   return (
     <header className="site-header no-print" data-scrolled={scrolled}>
@@ -109,14 +125,14 @@ export function Header() {
 
           {authed ? (
             <>
-              <span className="user-chip" title={profile?.email}>
+              <Link href="/me" className="user-chip" title={profile?.email}>
                 <span className="avatar" aria-hidden="true">
                   {initials(profile?.display_name)}
                 </span>
                 <span>{profile?.display_name || "Khách"}</span>
-              </span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void logout()}>
-                Đăng xuất
+              </Link>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={loggingOut} onClick={() => void signOut()}>
+                {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
               </button>
             </>
           ) : (
@@ -126,6 +142,7 @@ export function Header() {
           )}
         </div>
       </div>
+      {notice && <p className="small" role="status">{notice}</p>}
     </header>
   );
 }

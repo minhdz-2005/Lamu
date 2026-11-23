@@ -1,0 +1,7 @@
+# Only used with a unique -p lamu-m3-test-<runid>; never against demo volumes.
+services:
+  identity-db:
+    ports: ["127.0.0.1::5432"]
+  rabbitmq:
+    ports:
+      - "127.0.0.1::5672"

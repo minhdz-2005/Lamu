@@ -12,7 +12,11 @@ Mỗi file là **ảnh chụp có đề ngày**, không phải tài liệu sốn
 
 Mỗi feature một file khi test manual theo mục "Checklist nghiệm thu" của tài liệu tương ứng: `01-auth.md`, `02-event-discovery.md`, `03-event-detail-and-booking.md`, `04-my-tickets.md`, `05-organizer.md`.
 
-Một dòng kết quả gồm: mục checklist, đạt hay không, `request_id` của response lỗi (nếu có), và ghi chú ngắn. File này trống khi chưa test; commit kèm kết quả để buổi bảo chứng minh được đường thẳng đứng chạy thật.
+Các trang 06–09 có [báo cáo nghiệm thu local chung](identity-pages-integration-02.md) cho Gateway và Identity.
+
+01-auth hiện có report mock lịch sử; thêm section lượt mới khi thực sự test Gateway/Identity, không ghi đè hoặc đổi provider của record cũ. Manual Swagger/DOC-01 M2 USER-CONFIRMED và regression backend P8 không thay acceptance UI/browser M4.
+
+Một lượt cần ngày/môi trường, frontend/backend version hoặc working tree, base URL/proxy mode, provider thật/mock/fixture, expected/actual, request_id an toàn và evidence. Dòng chưa chạy ghi NOT RUN, fail giữ lỗi/tái hiện, pass chỉ sau quan sát tương ứng. Không lưu password/token/email thật/raw sensitive response; không tự commit hoặc gửi báo cáo chỉ từ quy ước này.
 
 Định dạng gợi ý:
 

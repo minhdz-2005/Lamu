@@ -1,7 +1,142 @@
 name: lumasoa
 services:
+  identity-migrate:
+    profiles: [m1, m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+      target: tools
+    command: ["npm", "run", "db:deploy", "-w", "@lamu/identity"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+    depends_on:
+      identity-db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+  identity-service:
+    profiles: [m1, m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 bytes}
+      JWT_ISSUER: ${JWT_ISSUER:-lumasoa}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lumasoa-frontend}
+      APP_ENV: ${APP_ENV:-local}
+      PASSWORD_RESET_OTP_HMAC_KEY: ${PASSWORD_RESET_OTP_HMAC_KEY}
+      MAIL_JOB_KEY_ID: ${MAIL_JOB_KEY_ID:-v1}
+      MAIL_JOB_PREVIOUS_KEYS_JSON: ${MAIL_JOB_PREVIOUS_KEYS_JSON:-}
+      MAIL_JOB_ENCRYPTION_KEY: ${MAIL_JOB_ENCRYPTION_KEY}
+      PASSWORD_RESET_OTP_TTL_SECONDS: ${PASSWORD_RESET_OTP_TTL_SECONDS}
+      PASSWORD_RESET_TOKEN_TTL_SECONDS: ${PASSWORD_RESET_TOKEN_TTL_SECONDS}
+      PASSWORD_RESET_MAX_ATTEMPTS: ${PASSWORD_RESET_MAX_ATTEMPTS}
+      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS}
+      PASSWORD_RESET_EMAIL_HOURLY_LIMIT: ${PASSWORD_RESET_EMAIL_HOURLY_LIMIT}
+      PASSWORD_RESET_IP_HOURLY_LIMIT: ${PASSWORD_RESET_IP_HOURLY_LIMIT}
+      CLOUDINARY_TIMEOUT_MS: ${CLOUDINARY_TIMEOUT_MS:-4000}
+      MEDIA_MAX_PIXELS: ${MEDIA_MAX_PIXELS:-40000000}
+      MEDIA_MAX_PENDING_INTENTS: ${MEDIA_MAX_PENDING_INTENTS:-10}
+      MEDIA_HOURLY_INTENT_LIMIT: ${MEDIA_HOURLY_INTENT_LIMIT:-30}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_AVATAR_UPLOAD_PRESET: ${CLOUDINARY_AVATAR_UPLOAD_PRESET}
+      CLOUDINARY_ORG_COVER_UPLOAD_PRESET: ${CLOUDINARY_ORG_COVER_UPLOAD_PRESET}
+      CLOUDINARY_ASSET_PREFIX: ${CLOUDINARY_ASSET_PREFIX}
+      MEDIA_UPLOAD_INTENT_TTL_SECONDS: ${MEDIA_UPLOAD_INTENT_TTL_SECONDS}
+      AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES}
+      ORG_COVER_MAX_BYTES: ${ORG_COVER_MAX_BYTES}
+      HTTP_LOG: "1"
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+    networks: [backend]
+  identity-mail-worker:
+    profiles: [m1, m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    command: ["node", "services/identity-service/dist/security/mail.main.js"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      APP_ENV: ${APP_ENV:-local}
+      MAIL_JOB_KEY_ID: ${MAIL_JOB_KEY_ID:-v1}
+      MAIL_JOB_PREVIOUS_KEYS_JSON: ${MAIL_JOB_PREVIOUS_KEYS_JSON:-}
+      MAIL_JOB_ENCRYPTION_KEY: ${MAIL_JOB_ENCRYPTION_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+    networks: [backend]
+
+  identity-media-cleanup-worker:
+    profiles: [m1, m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    command: ["node", "services/identity-service/dist/media/cleanup.main.js"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      CLOUDINARY_TIMEOUT_MS: ${CLOUDINARY_TIMEOUT_MS:-4000}
+      MEDIA_MAX_PIXELS: ${MEDIA_MAX_PIXELS:-40000000}
+      MEDIA_MAX_PENDING_INTENTS: ${MEDIA_MAX_PENDING_INTENTS:-10}
+      MEDIA_HOURLY_INTENT_LIMIT: ${MEDIA_HOURLY_INTENT_LIMIT:-30}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_AVATAR_UPLOAD_PRESET: ${CLOUDINARY_AVATAR_UPLOAD_PRESET}
+      CLOUDINARY_ORG_COVER_UPLOAD_PRESET: ${CLOUDINARY_ORG_COVER_UPLOAD_PRESET}
+      CLOUDINARY_ASSET_PREFIX: ${CLOUDINARY_ASSET_PREFIX}
+      MEDIA_UPLOAD_INTENT_TTL_SECONDS: ${MEDIA_UPLOAD_INTENT_TTL_SECONDS}
+      AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES}
+      ORG_COVER_MAX_BYTES: ${ORG_COVER_MAX_BYTES}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+    networks: [backend]
+
+  gateway:
+    profiles: [m1, m3]
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      IDENTITY_URL: http://identity-service:8080
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 bytes}
+      JWT_ISSUER: ${JWT_ISSUER:-lumasoa}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-lumasoa-frontend}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-3000}
+      MEDIA_UPSTREAM_TIMEOUT_MS: ${MEDIA_UPSTREAM_TIMEOUT_MS:-8000}
+      GATEWAY_TRUSTED_PROXY_CIDRS: ${GATEWAY_TRUSTED_PROXY_CIDRS:-}
+      HTTP_LOG: "1"
+    ports: ["${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"]
+    depends_on:
+      identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+    networks: [backend]
   identity-db:
     image: postgres:16-alpine
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_DB: identity_db
       POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
@@ -66,12 +201,15 @@ services:
       retries: 10
     networks: [backend]
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4.4.0-management-alpine@sha256:598b474e2511f37a7408f3fa580f002684638f4ad6401395102b51e3209a9a51
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-luma}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local_dev_only}
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
     ports:
-      - "15672:15672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -79,13 +217,29 @@ services:
       retries: 10
     networks: [backend]
 
-# This repository currently contains architecture/docs scaffolding, not runnable
-# application images. Add gateway and service build targets here as their
-# Dockerfiles and implementations are created. Keep their ports internal.
+  identity-worker:
+    profiles: [m3]
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    command: ["node", "services/identity-service/dist/messaging/main.js"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumasoa}:${POSTGRES_PASSWORD:-local_dev_only}@identity-db:5432/identity_db
+      RABBITMQ_USER: ${RABBITMQ_USER:-luma}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-local_dev_only}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    networks: [backend]
+
+# M1: docker compose --profile m1 up --build gateway
+# Only explicitly targeted services/dependencies start in this mode; no broker.
 networks:
   backend:
     driver: bridge
 volumes:
+  rabbitmq-data:
   identity-data:
   event-data:
   registration-data:

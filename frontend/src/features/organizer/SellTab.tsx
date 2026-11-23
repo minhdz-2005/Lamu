@@ -33,11 +33,11 @@ export function SellTab({ events, eventId, onEventChange, rights, onGoToEvents }
   const [rows, setRows] = useState<AvailabilityItem[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [notPublished, setNotPublished] = useState(false);
-  const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string } | null>(null);
 
   const [form, setForm] = useState<TicketTypeForm>({ name: "", price: "", capacity: "50", sales_start: "", sales_end: "" });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof TicketTypeForm, string>>>({});
-  const [formError, setFormError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [formError, setFormError] = useState<{ message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const seededFor = useRef("");
 
@@ -152,7 +152,7 @@ export function SellTab({ events, eventId, onEventChange, rights, onGoToEvents }
       </div>
 
       {error && (
-        <Banner kind="error" requestId={error.requestId}>
+        <Banner kind="error">
           {error.message}{" "}
           <Button size="sm" onClick={() => void load()}>
             Thử lại
@@ -231,7 +231,7 @@ export function SellTab({ events, eventId, onEventChange, rights, onGoToEvents }
           <Banner kind="warn">Bạn không có quyền thêm loại vé cho event này.</Banner>
         )}
         {formError && (
-          <Banner kind="error" requestId={formError.requestId}>
+          <Banner kind="error">
             {formError.message}
           </Banner>
         )}

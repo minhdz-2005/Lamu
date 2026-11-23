@@ -16,16 +16,22 @@ import {
   inventoryOf,
   issueTokens,
   membershipsOf,
+  mockPasswordHash,
   releaseReservation,
   revokeRefresh,
   salesOpen,
   settleReservation,
   totals,
+  verifyMockPassword,
   type EventRecord,
   type Reservation,
   type User,
 } from "@/mock/store";
 import type { NextRequest } from "next/server";
+import { avatarFormats, maxAvatarBytes } from "@/lib/avatar";
+import { isIdentityUuid } from "@/lib/authMode";
+import { emptyCover, maxCoverBytes, validOrganizationDescription } from "@/lib/organizationProfile";
+import { validPassword } from "@/features/auth/validation";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
@@ -61,7 +67,9 @@ async function readBody(req: Request): Promise<Record<string, unknown>> {
   const text = await req.text();
   if (!text) return {};
   try {
-    return JSON.parse(text) as Record<string, unknown>;
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
+    return body as Record<string, unknown>;
   } catch {
     throw new HttpError(400, "VALIDATION_FAILED", "Body không phải JSON hợp lệ.");
   }
@@ -75,6 +83,20 @@ function requireUser(req: Request): User {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function mockMediaUrl(req: Request, id: string, cover = false) {
+  const url = new URL(req.url);
+  // Next can normalize the request URL to localhost while the browser uses 127.0.0.1.
+  url.host = req.headers.get("host") ?? url.host;
+  return new URL(`/api/${cover ? "mock-cover" : "mock-avatar"}/${id}`, url).href;
+}
+
+function descriptionOf(value: unknown) {
+  const description = typeof value === "string" ? value.trim() || null : value;
+  if (!validOrganizationDescription(description))
+    throw new HttpError(400, "VALIDATION_FAILED", "Mô tả tổ chức không hợp lệ.");
+  return description;
 }
 
 function asNumber(value: unknown): number {
@@ -133,13 +155,13 @@ async function handle(req: NextRequest, path: string[]): Promise<Response> {
     const email = asString(body.email).trim().toLowerCase();
     const password = asString(body.password);
     const displayName = asString(body.display_name).trim();
-    if (!email.includes("@") || password.length < 8 || !displayName) {
+    if (!email.includes("@") || !validPassword(password) || !displayName) {
       throw new HttpError(400, "VALIDATION_FAILED", "Email, mật khẩu (≥ 8 ký tự) và tên hiển thị là bắt buộc.");
     }
     if (store.users.some((u) => u.email === email)) {
       throw new HttpError(409, "EMAIL_TAKEN", "Email này đã có tài khoản.");
     }
-    const user: User = { id: randomUUID(), email, display_name: displayName, password, status: "ACTIVE" };
+    const user: User = { id: randomUUID(), email, display_name: displayName, password_hash: mockPasswordHash(password), status: "ACTIVE" };
     store.users.push(user);
     return json({ user_id: user.id }, 200, requestId);
   }
@@ -149,7 +171,7 @@ async function handle(req: NextRequest, path: string[]): Promise<Response> {
     const email = asString(body.email).trim().toLowerCase();
     const password = asString(body.password);
     const user = store.users.find((u) => u.email === email);
-    if (!user || user.password !== password) {
+    if (!user || !validPassword(password) || !verifyMockPassword(user, password)) {
       throw new HttpError(401, "UNAUTHENTICATED", "Email hoặc mật khẩu không đúng.");
     }
     if (user.status === "LOCKED") throw new HttpError(403, "FORBIDDEN", "Tài khoản bị khóa. Liên hệ ban tổ chức demo.");
@@ -173,28 +195,159 @@ async function handle(req: NextRequest, path: string[]): Promise<Response> {
     const user = requireUser(req);
     const memberships = membershipsOf(user.id).map((m) => {
       const org = store.organizations.find((o) => o.id === m.organization_id);
-      return { organization_id: m.organization_id, name: org?.name ?? "", slug: org?.slug ?? "", roles: m.roles };
+      return { organization_id: m.organization_id, name: org?.name ?? "", slug: org?.slug ?? "", roles: m.roles,
+        description: org?.description ?? null, cover: org?.cover ?? emptyCover };
     });
-    return json({ id: user.id, email: user.email, display_name: user.display_name, memberships }, 200, requestId);
+    return json({ id: user.id, email: user.email, display_name: user.display_name, memberships,
+      avatar: user.avatar ?? { url: null, revision: "0" } }, 200, requestId);
+  }
+
+  if (method === "POST" && joined === "users/me/password") {
+    requireUser(req);
+    const body = await readBody(req);
+    const user = requireUser(req);
+    const current = asString(body.current_password);
+    const next = asString(body.new_password);
+    if (Object.keys(body).length !== 2 || !validPassword(current) || !validPassword(next))
+      throw new HttpError(400, "VALIDATION_FAILED", "Mật khẩu cần từ 8 đến 128 ký tự.");
+    const window = Math.floor(Date.now() / 900_000);
+    const previous = store.passwordAttempts.get(user.id);
+    const count = previous?.window === window ? previous.count + 1 : 1;
+    store.passwordAttempts.set(user.id, { window, count });
+    if (count > 5) {
+      const response = fail(429, "RATE_LIMITED", "Bạn đã thử quá nhiều lần.", requestId);
+      response.headers.set("Retry-After", String(Math.ceil(((window + 1) * 900_000 - Date.now()) / 1000)));
+      return response;
+    }
+    if (!verifyMockPassword(user, current))
+      throw new HttpError(400, "CURRENT_PASSWORD_INCORRECT", "Mật khẩu hiện tại không đúng.");
+    user.password_hash = mockPasswordHash(next);
+    const at = iso(new Date());
+    for (const session of store.sessions)
+      if (session.user_id === user.id && !session.revoked_at) session.revoked_at = at;
+    const response = json({ status: "OK" }, 200, requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
+
+  const coverPath = path[0] === "organizations" && path[2] === "cover";
+  const coverIntent = coverPath && path.length === 4 && path[3] === "upload-intents";
+  const coverCommit = coverPath && path.length === 3;
+  function coverTarget(user: User) {
+    if (!isIdentityUuid(path[1])) throw new HttpError(400, "VALIDATION_FAILED", "Mã tổ chức không hợp lệ.");
+    const org = store.organizations.find((row) => row.id === path[1]);
+    if (!org) throw new HttpError(404, "NOT_FOUND", "Không tìm thấy tổ chức.");
+    if (!hasPermission(user, org.id, "org.profile.update"))
+      throw new HttpError(403, "FORBIDDEN", "Không có quyền cập nhật tổ chức.");
+    return org;
+  }
+
+  if (method === "POST" && (joined === "users/me/avatar/upload-intents" || coverIntent)) {
+    const body = await readBody(req);
+    const user = requireUser(req);
+    if (Object.keys(body).length !== 1 || !/^\d{1,18}$/.test(asString(body.expected_revision)))
+      throw new HttpError(400, "VALIDATION_FAILED", "Phiên bản ảnh không hợp lệ.");
+    const org = coverIntent ? coverTarget(user) : undefined;
+    const revision = (org ? org.cover : user.avatar)?.revision ?? "0";
+    if (BigInt(asString(body.expected_revision)) !== BigInt(revision))
+      throw new HttpError(409, "REVISION_CONFLICT", "Phiên bản ảnh đã thay đổi.");
+    const id = randomUUID(), expiresAt = Date.now() + 15 * 60_000;
+    store.avatarIntents.set(id, { userId: user.id, orgId: org?.id, revision, expiresAt });
+    return json({
+      intent_id: id, expected_revision: revision, expires_at: iso(new Date(expiresAt)),
+      upload_url: mockMediaUrl(req, id, coverIntent), cloud_name: "mock",
+      api_key: "mock", params: {
+        timestamp: Math.floor(Date.now() / 1000), public_id: id,
+        overwrite: false, upload_preset: "mock", signature: "mock",
+      },
+    }, 200, requestId);
+  }
+
+  if (["mock-avatar", "mock-cover"].includes(path[0]) && path.length === 2) {
+    const intent = store.avatarIntents.get(path[1]);
+    const cover = path[0] === "mock-cover";
+    if (!intent || Boolean(intent.orgId) !== cover) throw new HttpError(404, "NOT_FOUND", "Không tìm thấy ảnh.");
+    const maxBytes = cover ? maxCoverBytes : maxAvatarBytes;
+    if (method === "GET" && intent.image && intent.committed)
+      return new Response(intent.image, { headers: { "Content-Type": intent.image.type } });
+    if (method === "POST" && !intent.image && intent.expiresAt > Date.now()) {
+      if (Number(req.headers.get("content-length")) > maxBytes + 8192)
+        throw new HttpError(413, "VALIDATION_FAILED", "Ảnh quá lớn.");
+      const form = await req.formData();
+      const image = form.get("file");
+      if (!(image instanceof File) || !image.size || image.size > maxBytes || !avatarFormats.includes(image.type))
+        throw new HttpError(400, "VALIDATION_FAILED", "Ảnh không hợp lệ.");
+      if (intent.image) throw new HttpError(409, "CONFLICT", "Ảnh đã được tải lên.");
+      intent.image = image;
+      return json({ status: "OK" }, 200, requestId);
+    }
+    throw new HttpError(404, "NOT_FOUND", "Không tìm thấy ảnh.");
+  }
+
+  if (method === "PUT" && (joined === "users/me/avatar" || coverCommit)) {
+    const body = await readBody(req);
+    const user = requireUser(req);
+    const id = asString(body.intent_id);
+    if (Object.keys(body).length !== 1 || !isIdentityUuid(id))
+      throw new HttpError(400, "VALIDATION_FAILED", "Lượt tải ảnh không hợp lệ.");
+    const org = coverCommit ? coverTarget(user) : undefined;
+    const intent = store.avatarIntents.get(id);
+    if (!intent || intent.userId !== user.id || intent.orgId !== org?.id)
+      throw new HttpError(404, "NOT_FOUND", "Không tìm thấy lượt tải ảnh.");
+    if (intent.committed) return json(intent.committed, 200, requestId);
+    if (intent.expiresAt <= Date.now() || !intent.image)
+      throw new HttpError(409, "INTENT_CONFLICT", "Lượt tải ảnh không còn khả dụng.");
+    if (intent.revision !== ((org ? org.cover : user.avatar)?.revision ?? "0"))
+      throw new HttpError(409, "REVISION_CONFLICT", "Phiên bản ảnh đã thay đổi.");
+    const media = { url: mockMediaUrl(req, id, coverCommit), revision: (BigInt(intent.revision) + 1n).toString() };
+    intent.committed = media;
+    if (org) org.cover = media;
+    else user.avatar = media;
+    return json(media, 200, requestId);
   }
 
   if (method === "POST" && joined === "organizations") {
     const user = requireUser(req);
     const body = await readBody(req);
     const name = asString(body.name).trim();
-    const slug = asString(body.slug).trim().toLowerCase();
-    if (!name || !slug) throw new HttpError(400, "VALIDATION_FAILED", "Tên và slug tổ chức là bắt buộc.");
-    if (store.organizations.some((o) => o.slug === slug)) throw new HttpError(409, "SLUG_TAKEN", "Đường dẫn (slug) này đã tồn tại.");
+    const explicit = body.slug === undefined ? null : asString(body.slug).trim().toLowerCase();
+    if (!name || Array.from(name).length > 100 || (explicit !== null &&
+        (explicit.length < 3 || explicit.length > 63 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(explicit))) ||
+        Object.keys(body).some((field) => !["name", "slug", "description"].includes(field)))
+      throw new HttpError(400, "VALIDATION_FAILED", "Tên hoặc slug tổ chức không hợp lệ.");
+    const description = descriptionOf(body.description === undefined ? null : body.description);
+    const key = req.headers.get("idempotency-key");
+    if (!key) throw new HttpError(400, "IDEMPOTENCY_KEY_REQUIRED", "Cần có Idempotency-Key.");
+    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(key))
+      throw new HttpError(400, "VALIDATION_FAILED", "Idempotency-Key không hợp lệ.");
+    const cacheKey = `create-org:${user.id}:${key}`;
+    const payload = JSON.stringify({ name, slug: explicit, ...(description === null ? {} : { description }) });
+    const previous = store.idempotency[cacheKey];
+    if (previous) {
+      const { payload: saved, id } = JSON.parse(previous);
+      if (!membershipsOf(user.id).some((row) => row.organization_id === id))
+        throw new HttpError(403, "FORBIDDEN", "Bạn không thuộc tổ chức này.");
+      if (saved !== payload) throw new HttpError(409, "CONFLICT", "Idempotency-Key đã được sử dụng.");
+      return json({ organization_id: id }, 201, requestId);
+    }
+    const base = name.normalize("NFD").replace(/\p{M}/gu, "").replace(/[đĐ]/g, "d").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    let slug = explicit ?? (base ? (base.length < 3 ? `org-${base}` : base) : "organization").slice(0, 63).replace(/-+$/g, "");
+    if (store.organizations.some((o) => o.slug === slug)) {
+      if (explicit !== null) throw new HttpError(409, "SLUG_TAKEN", "Đường dẫn (slug) này đã tồn tại.");
+      slug = `${slug.slice(0, 26).replace(/-+$/g, "")}-${randomUUID()}`;
+    }
     const id = randomUUID();
-    store.organizations.push({ id, name, slug, created_by: user.id });
+    store.organizations.push({ id, name, slug, description, cover: emptyCover, created_by: user.id });
     store.memberships.push({ id: randomUUID(), organization_id: id, user_id: user.id, status: "ACTIVE", roles: ["OWNER"] });
-    return json({ organization_id: id }, 200, requestId);
+    store.idempotency[cacheKey] = JSON.stringify({ payload, id });
+    return json({ organization_id: id }, 201, requestId);
   }
 
   if (method === "GET" && path[0] === "public" && path[1] === "organizations") {
     const org = store.organizations.find((o) => o.slug === path[2]);
     if (!org) throw new HttpError(404, "NOT_FOUND", "Không tìm thấy tổ chức.");
-    return json({ name: org.name, slug: org.slug }, 200, requestId);
+    return json({ name: org.name, slug: org.slug, cover: org.cover ?? emptyCover }, 200, requestId);
   }
 
   if (method === "GET" && path[0] === "organizations" && path[2] === "members") {
@@ -216,7 +369,19 @@ async function handle(req: NextRequest, path: string[]): Promise<Response> {
     if (!org) throw new HttpError(404, "NOT_FOUND", "Không tìm thấy tổ chức.");
     const membership = store.memberships.find((m) => m.organization_id === org.id && m.user_id === user.id);
     if (!membership) throw new HttpError(403, "FORBIDDEN", "Bạn không thuộc tổ chức này.");
-    return json({ id: org.id, name: org.name, slug: org.slug, my_roles: membership.roles }, 200, requestId);
+    return json({ id: org.id, name: org.name, slug: org.slug, my_roles: membership.roles,
+      description: org.description ?? null, cover: org.cover ?? emptyCover }, 200, requestId);
+  }
+
+  if (method === "PATCH" && path[0] === "organizations" && path.length === 2) {
+    requireUser(req);
+    const body = await readBody(req);
+    if (!Object.hasOwn(body, "description") || Object.keys(body).length !== 1)
+      throw new HttpError(400, "VALIDATION_FAILED", "Cần có trường mô tả tổ chức.");
+    const description = descriptionOf(body.description);
+    const org = coverTarget(requireUser(req));
+    org.description = description;
+    return json({ description: org.description }, 200, requestId);
   }
 
   if (method === "GET" && path[0] === "organizations" && path[2] === "events") {

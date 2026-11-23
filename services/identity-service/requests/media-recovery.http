@@ -1,0 +1,69 @@
+@base = http://localhost:8080/api
+@email = account@example.test
+@accessToken = REPLACE_IN_PRIVATE_CLIENT
+@organizationId = 00000000-0000-4000-8000-000000000000
+@intentId = 00000000-0000-4000-8000-000000000000
+
+### Generic recovery acceptance
+POST {{base}}/auth/forgot-password
+Content-Type: application/json
+
+{"email":"{{email}}"}
+
+### Enter latest OTP from your controlled inbox; do not save real secrets here
+POST {{base}}/auth/verify-reset-code
+Content-Type: application/json
+
+{"email":"{{email}}","code":"000000"}
+
+### Keep real token/password in private client memory, never commit
+POST {{base}}/auth/reset-password
+Content-Type: application/json
+
+{"reset_token":"REPLACE_IN_PRIVATE_CLIENT","new_password":"SyntheticExample!2026"}
+
+### Current avatar/revision
+GET {{base}}/users/me
+Authorization: Bearer {{accessToken}}
+
+### Signed intent; then direct multipart upload using returned params
+POST {{base}}/users/me/avatar/upload-intents
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"expected_revision":"0"}
+
+### Avatar commit, only server-issued intent ID
+PUT {{base}}/users/me/avatar
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"intent_id":"{{intentId}}"}
+
+### Delete with current revision
+DELETE {{base}}/users/me/avatar
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"expected_revision":"1"}
+
+### Cover requires org.profile.update in this organization
+POST {{base}}/organizations/{{organizationId}}/cover/upload-intents
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"expected_revision":"0"}
+
+### Cover commit
+PUT {{base}}/organizations/{{organizationId}}/cover
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"intent_id":"{{intentId}}"}
+
+### Cover delete
+DELETE {{base}}/organizations/{{organizationId}}/cover
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{"expected_revision":"1"}

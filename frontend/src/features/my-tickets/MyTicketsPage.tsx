@@ -35,7 +35,7 @@ export function MyTicketsPage() {
   const { state } = useSession();
   const [items, setItems] = useState<MyTicket[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string } | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [printing, setPrinting] = useState<string | null>(null);
   const fetchedAt = useRef(0);
@@ -122,7 +122,7 @@ export function MyTicketsPage() {
         ]}
       />
 
-      {error && <ErrorState message={error.message} requestId={error.requestId} onRetry={() => void load(true)} />}
+      {error && <ErrorState message={error.message} onRetry={() => void load(true)} />}
 
       {loading && !items ? (
         <div className="grid">

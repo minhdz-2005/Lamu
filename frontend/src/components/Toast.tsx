@@ -9,11 +9,10 @@ interface ToastItem {
   id: number;
   message: string;
   kind: Kind;
-  requestId?: string;
 }
 
 interface ToastApi {
-  push: (message: string, kind?: Kind, requestId?: string) => void;
+  push: (message: string, kind?: Kind) => void;
 }
 
 const ToastContext = createContext<ToastApi>({ push: () => {} });
@@ -26,10 +25,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const seq = useRef(0);
   const timers = useRef<number[]>([]);
 
-  const push = useCallback((message: string, kind: Kind = "info", requestId?: string) => {
+  const push = useCallback((message: string, kind: Kind = "info") => {
     seq.current += 1;
     const id = seq.current;
-    setItems((prev) => [...prev, { id, message, kind, requestId }].slice(-MAX_STACK));
+    setItems((prev) => [...prev, { id, message, kind }].slice(-MAX_STACK));
     const timer = window.setTimeout(() => {
       setItems((prev) => prev.filter((item) => item.id !== id));
     }, LIFETIME_MS);
@@ -52,7 +51,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => (
           <div key={item.id} className="toast" data-kind={item.kind}>
             {item.message}
-            {item.requestId && <span className="request-id mono">{item.requestId}</span>}
           </div>
         ))}
       </div>

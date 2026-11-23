@@ -1,0 +1,29 @@
+{
+  "project": "lamu-m1-smoke-1794667059022",
+  "completed_at": "2026-11-14T14:39:48.263Z",
+  "postgres": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+  "images": {
+    "identity-db": "sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139",
+    "identity-service": "sha256:daeec3e8af2ccde26ba98bf80e0187e740efe934d37c2ea347c4ed4431094fa6",
+    "gateway": "sha256:bf57ee98c68ab9ad6572fbd012cc7d3b616673c099048dc8e26258ad58f8da36",
+    "identity-migrate": "sha256:8fb44f7f372a5f8495fbea8f869b829d6f593118b4102ee7958afaceec1789f7"
+  },
+  "checks": [
+    "P6 create/list/accept/replay/profile/decline/revoke",
+    "P6 membership revision 1 and one MembershipChanged",
+    "P6 invitation persistence across restart/redeploy",
+    "P5 create/replay/read/members/public/roles/no-op/conflict",
+    "P5 revision/idempotency/org state persists across restart",
+    "P5 internal routes absent from Gateway and Swagger",
+    "apps healthy",
+    "migration deploy and redeploy",
+    "internal ports unpublished",
+    "full auth/profile/rotation/logout flow",
+    "restart persistence",
+    "seed twice",
+    "DB outage/recovery",
+    "Argon2 baseline",
+    "Jest/tsx absent from runtimes"
+  ],
+  "scope": "isolated synthetic Compose project; no RabbitMQ/frontend/Event"
+}
