@@ -242,12 +242,14 @@ Thứ tự (mỗi lượt làm MỘT hàng, theo khả năng verify độc lập
 
 ## 6. Tiêu chí nghiệm thu của riêng service (trích architecture §7, đối chiếu được)
 
-- [ ] 200 request đồng thời capacity 100: không vượt quota, không nhân đôi reservation; `sold + reserved <= capacity` đúng sau chạy (BR-INV-01/02/09).
-- [ ] Vé miễn phí: một request duy nhất ra vé, Payment không xuất hiện (BR-INV-07).
-- [ ] Vé có phí: chỉ `PaymentSucceeded` confirm; UI không có đường confirm khác (BR-RSV-01).
-- [ ] Worker nhả hết hạn đúng một lần kể cả 2 tiến trình (BR-RSV-04).
-- [ ] Consumer idempotent theo `message_id`; retry 1s→5s→25s rồi DLQ, không `requeue=true` (BR-ASY-02/03).
-- [ ] Outbox ghi cùng transaction nghiệp vụ; publish sau commit có confirm (BR-ASY-01).
-- [ ] Không REST ngược chiều: không gọi Event/Payment/Identity để lấy dữ liệu nghiệp vụ (authorization/check là điểm chốt quyền được thiết kế riêng, không phải đọc dữ liệu) (BR-ASY-06).
-- [ ] Không FK chéo; migration chỉ của `registration_db`.
-- [ ] Check-in đúng quyền `ticket.checkin`, mã tra không phân biệt hoa thường, 409 đúng message (BR-TCK-01..03, BR-FMT-16).
+Mỗi dòng dưới đây verify bằng `mvn -o -B test` (113 test, chạy ngày 2026-11-23); ngoặc đơn là test chứng minh.
+
+- [x] 200 request đồng thời capacity 100: không vượt quota, không nhân đôi reservation; `sold + reserved <= capacity` đúng sau chạy (BR-INV-01/02/09). — `ConcurrentReservationLoadTest.haiTramRequestDongThoiTrenCapacityMotTramKhongVuotQuota` (HTTP thật, in số liệu `[5.2]`), `ReservationPaidTest.haiTramRequestDongThoiTrenCapacity100Dung100ThanhCong` (cấp service).
+- [x] Vé miễn phí: một request duy nhất ra vé, Payment không xuất hiện (BR-INV-07). — `ReservationFreeTest.totalZeroXacNhanMotBuocXuatVaToanBoTrongCungRequest`.
+- [x] Vé có phí: chỉ `PaymentSucceeded` confirm; UI không có đường confirm khác (BR-RSV-01). — `PaymentSagaConsumerTest.paymentSucceededXuatVeVaChotQuota`, `ReservationConfirmApiTest.confirmLanHaiHoacDaHetHanThi409`.
+- [x] Worker nhả hết hạn đúng một lần kể cả 2 tiến trình (BR-RSV-04). — `ReservationExpiryWorkerTest.haiTienTrinhCungQuetKhongNhaMotChoHaiLan`, `...quaHanThiTuNhaChoVaPhatLyDoExpired`.
+- [x] Consumer idempotent theo `message_id`; retry 1s→5s→25s rồi DLQ, không `requeue=true` (BR-ASY-02/03). — `PaymentSagaConsumerTest.messageThuHaiKhacEventIdCungReservationKhongSinhVeThuHai`, `...payloadThieuReservationIdXuongDlqSauBaLanThu`, `TopologyTest.dlqKhongCoConsumerVaKhongAiTieuHo`.
+- [x] Outbox ghi cùng transaction nghiệp vụ; publish sau commit có confirm (BR-ASY-01). — `ReservationPaidTest.heldDungShapeTtlVaOutboxDu7Field`, `OutboxWorkerTest.envelopeDu8FieldHeaderDungMessaging5VaGhiPublishedAtSauConfirm`, `OutboxWorkerBrokerDownTest.brokerChetThiOutboxVanGhiVaKhongDuocDanhDauPublishedAt`.
+- [x] Không REST ngược chiều: không gọi Event/Payment/Identity để lấy dữ liệu nghiệp vụ (authorization/check là điểm chốt quyền được thiết kế riêng, không phải đọc dữ liệu) (BR-ASY-06). — quét `src/main/java`: chỉ 2 file dùng HTTP client, cả hai ở `common/identity` (`AuthorizationClient`, `IdentityConfig`); `event_snapshot` và `reservations.recipient_email` là đường đọc duy nhất.
+- [x] Không FK chéo; migration chỉ của `registration_db`. — 6 `REFERENCES` trong V1 chỉ trỏ `ticket_types`/`reservations`/`registrations` nội bộ; container chạy Flyway chỉ với DB của mình (bằng chứng migrate trên DB trắng: V1→V2→V3 trong network `backend`).
+- [x] Check-in đúng quyền `ticket.checkin`, mã tra không phân biệt hoa thường, 409 đúng message (BR-TCK-01..03, BR-FMT-16). — `TicketCheckInTest` (10 test, gồm race 2 luồng và message `ALREADY_CHECKED_IN` đúng dạng RFC3339).

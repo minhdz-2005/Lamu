@@ -2,6 +2,7 @@ package com.luma.registration.outbox;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.luma.registration.common.messaging.TraceHeaders;
 import com.luma.registration.common.web.RequestIdFilter;
 import com.luma.registration.reservation.ReservationService;
 import com.luma.registration.reservation.TestData;
@@ -74,12 +75,20 @@ class OutboxWorkerTest {
     }
 
     private String makeHeldReservation(String requestId) {
+        return makeHeldReservation(requestId, null);
+    }
+
+    /** causationId != null mô phỏng đúng điều IdempotentConsumer đặt khi handler chạy. */
+    private String makeHeldReservation(String requestId, String causationId) {
         UUID eventId = UUID.randomUUID();
         events.add(eventId);
         TestData.insertSnapshot(jdbc, eventId, "PUBLISHED");
         String type = TestData.insertTicketType(jdbc, eventId, "VIP", "150000.00", 100,
                 Instant.now().minusSeconds(3600), Instant.now().plusSeconds(3600), "ACTIVE").toString();
         MDC.put(RequestIdFilter.MDC_KEY, requestId);
+        if (causationId != null) {
+            MDC.put(TraceHeaders.CAUSATION_ID, causationId);
+        }
         try {
             ReservationService.HeldResponse response = (ReservationService.HeldResponse)
                     service.reserve(new ReservationService.Command(USER_ID, "worker@test.local", eventId,
@@ -122,9 +131,30 @@ class OutboxWorkerTest {
         assertThat(props.getDeliveryMode()).as("messaging.md §5: delivery_mode=2")
                 .isEqualTo(MessageDeliveryMode.toInt(MessageDeliveryMode.PERSISTENT));
         assertThat(props.getContentType()).isEqualTo("application/json");
+        // messaging §5 hàng causation_id: "rỗng với message do người dùng tạo" — không được gửi header rỗng.
+        assertThat(props.getHeaders()).doesNotContainKey(TraceHeaders.CAUSATION_ID);
 
         assertThat(jdbc.queryForObject("SELECT published_at FROM outbox_events WHERE aggregate_id = ?",
                 Instant.class, UUID.fromString(reservationId))).isNotNull();
+    }
+
+    @Test
+    void eventSinhRaTrongHandlerMangHeaderCausationIdLaEventIdCuaMessageCha() throws Exception {
+        UUID parentEventId = UUID.randomUUID();
+        makeHeldReservation("req-worker-causation", parentEventId.toString());
+
+        worker.publishPending();
+
+        GetResponse delivered = rabbit.execute(channel -> channel.basicGet(testQueue, true));
+        assertThat(delivered).isNotNull();
+        // FieldTable của client trả longstr dạng LongString chứ không phải String — so nội dung text,
+        // vì đó chính là thứ consumer phía service khác đọc được.
+        assertThat(delivered.getProps().getHeaders()).containsKey(TraceHeaders.CAUSATION_ID);
+        assertThat(String.valueOf(delivered.getProps().getHeaders().get(TraceHeaders.CAUSATION_ID)))
+                .as("consumer đọc header này là lần ra message đã kích hoạt event (messaging §5)")
+                .isEqualTo(parentEventId.toString());
+        assertThat(jdbc.queryForObject("SELECT causation_id FROM outbox_events", UUID.class))
+                .isEqualTo(parentEventId);
     }
 
     @Test

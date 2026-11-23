@@ -116,8 +116,9 @@ class PaymentSagaConsumerTest {
         String reservationId = reserveHeld("saga-ok");
         jdbc.update("DELETE FROM outbox_events");
 
-        TestMessages.published(rabbit, TopologyConfig.PAYMENT_EXCHANGE, "payment.succeeded.v1",
-                "PaymentSucceeded", UUID.randomUUID(), paymentPayload(reservationId, null, null), "req-saga-1");
+        String parentEventId = TestMessages.published(rabbit, TopologyConfig.PAYMENT_EXCHANGE,
+                "payment.succeeded.v1", "PaymentSucceeded", UUID.randomUUID(),
+                paymentPayload(reservationId, null, null), "req-saga-1");
         Await.until("reservation CONFIRMED", () -> "CONFIRMED".equals(jdbc.queryForObject(
                 "SELECT status FROM reservations WHERE id = ?", String.class, UUID.fromString(reservationId))));
 
@@ -133,6 +134,11 @@ class PaymentSagaConsumerTest {
         assertThat(count("SELECT count(*) FROM outbox_events WHERE event_type = 'TicketIssued'")).isEqualTo(2);
         String issued = jdbc.queryForObject("SELECT code FROM tickets LIMIT 1", String.class);
         assertThat(issued).matches("^LUMA-[0-9A-F]{4}-[0-9A-F]{4}$");
+        // messaging §5: ba event handler này sinh ra đều phải trỏ về đúng message PaymentSucceeded cha.
+        assertThat(count("SELECT count(*) FROM outbox_events WHERE causation_id = ?",
+                UUID.fromString(parentEventId)))
+                .as("causation_id = event_id của message cha, mọi event sinh trong handler")
+                .isEqualTo(3);
     }
 
     @Test
