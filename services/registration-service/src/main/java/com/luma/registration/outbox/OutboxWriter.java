@@ -1,0 +1,33 @@
+package com.luma.registration.outbox;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.Map;
+import java.util.UUID;
+
+/** Ghi row outbox CÙNG transaction đang gọi (BR-ASY-01) — worker 2.3 mới publish, ở đây không đụng broker. */
+@Component
+public class OutboxWriter {
+
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper mapper;
+
+    public OutboxWriter(JdbcTemplate jdbc, ObjectMapper mapper) {
+        this.jdbc = jdbc;
+        this.mapper = mapper;
+    }
+
+    public void enqueue(UUID aggregateId, String eventType, Map<String, Object> payload) {
+        String json;
+        try {
+            json = mapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Không serialize được outbox payload " + eventType, e);
+        }
+        jdbc.update("INSERT INTO outbox_events (aggregate_id, event_type, payload) VALUES (?, ?, ?::jsonb)",
+                aggregateId, eventType, json);
+    }
+}
