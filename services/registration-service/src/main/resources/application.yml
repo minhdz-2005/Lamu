@@ -18,12 +18,15 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:luma}
     password: ${RABBITMQ_PASSWORD:local_dev_only}
+    publisher-confirm-type: correlated
   jackson:
     property-naming-strategy: SNAKE_CASE
 
 app:
   reservation:
     hold-ttl-seconds: ${RESERVATION_HOLD_TTL_SECONDS:120}
+  outbox:
+    poll-ms: ${OUTBOX_POLL_MS:2000}
   identity:
     base-url: ${IDENTITY_URL:http://identity-service:8080}
     timeout-ms: ${IDENTITY_TIMEOUT_MS:3000}
