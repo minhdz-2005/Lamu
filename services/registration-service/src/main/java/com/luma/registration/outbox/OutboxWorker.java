@@ -2,6 +2,7 @@ package com.luma.registration.outbox;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.luma.registration.common.messaging.TraceHeaders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
@@ -54,19 +55,20 @@ public class OutboxWorker {
     }
 
     private record PendingRow(long id, UUID eventId, UUID aggregateId, String eventType,
-                              String payload, String requestId, Timestamp createdAt) {
+                              String payload, String requestId, UUID causationId, Timestamp createdAt) {
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-ms:2000}",
             initialDelayString = "${app.outbox.poll-ms:2000}")
     public void publishPending() {
         List<PendingRow> rows = jdbc.query("""
-                SELECT id, event_id, aggregate_id, event_type, payload::text AS payload, request_id, created_at
+                SELECT id, event_id, aggregate_id, event_type, payload::text AS payload, request_id,
+                       causation_id, created_at
                 FROM outbox_events WHERE published_at IS NULL ORDER BY id LIMIT 50""",
                 (rs, n) -> new PendingRow(rs.getLong("id"), (UUID) rs.getObject("event_id"),
                         (UUID) rs.getObject("aggregate_id"), rs.getString("event_type"),
                         rs.getString("payload"), rs.getString("request_id"),
-                        rs.getTimestamp("created_at")),
+                        (UUID) rs.getObject("causation_id"), rs.getTimestamp("created_at")),
                 new Object[]{});
         for (PendingRow row : rows) {
             Routing routing = ROUTES.get(row.eventType());
@@ -111,6 +113,11 @@ public class OutboxWorker {
         props.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
         if (row.requestId() != null) {
             props.setCorrelationId(row.requestId());
+        }
+        if (row.causationId() != null) {
+            // Header riêng theo messaging §5: correlation_id đã là header chuẩn của AMQP, causation_id
+            // thì không có chỗ định sẵn nên phải tự đặt — consumer phía bạn đọc đúng chuỗi này.
+            props.setHeader(TraceHeaders.CAUSATION_ID, row.causationId().toString());
         }
         return message;
     }

@@ -14,12 +14,17 @@ public final class TestData {
     }
 
     public static String insertSnapshot(JdbcTemplate jdbc, UUID eventId, String status) {
+        return insertSnapshot(jdbc, eventId, status, Instant.now());
+    }
+
+    /** Chèn snapshot với `starts_at` chọn trước (test sắp xếp vé theo event đã qua/sắp tới). */
+    public static String insertSnapshot(JdbcTemplate jdbc, UUID eventId, String status, Instant startsAt) {
         UUID orgId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO event_snapshot (event_id, organization_id, title, slug, status, starts_at, ends_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 eventId, orgId, "Event test " + eventId, "event-" + eventId, status,
-                Timestamp.from(Instant.now()), Timestamp.from(Instant.now().plusSeconds(7200)));
+                Timestamp.from(startsAt), Timestamp.from(startsAt.plusSeconds(7200)));
         return orgId.toString();
     }
 
@@ -39,6 +44,33 @@ public final class TestData {
     public static void insertOpenWindowTicket(JdbcTemplate jdbc, UUID eventId, String name, String price, int capacity) {
         insertTicketType(jdbc, eventId, name, price, capacity,
                 Instant.now().minusSeconds(3600), Instant.now().plusSeconds(3600), "ACTIVE");
+    }
+
+    /** Mã vé đúng dạng BR-TCK-01 nhưng sinh ngẫu nhiên để hai test không đụng cột UNIQUE code. */
+    public static String ticketCode() {
+        String hex = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+        return "LUMA-" + hex.substring(0, 4) + "-" + hex.substring(4);
+    }
+
+    /** Chuỗi vé đã phát hành: reservation CONFIRMED → registration → ticket, cho các test Phần 4. */
+    public static UUID insertTicket(JdbcTemplate jdbc, UUID eventId, UUID ticketTypeId, String userId,
+                                    String code, String status, Instant checkedInAt) {
+        UUID reservationId = UUID.randomUUID();
+        UUID buyerId = UUID.fromString(userId);
+        jdbc.update("""
+                INSERT INTO reservations (id, user_id, recipient_email, event_id, status, payment_status, idempotency_key)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', 'SUCCEEDED', ?)""",
+                reservationId, buyerId, "ticket-fixture@test.local", eventId, "fixture-" + reservationId);
+        UUID registrationId = UUID.randomUUID();
+        jdbc.update("INSERT INTO registrations (id, reservation_id, user_id, status) VALUES (?, ?, ?, 'CONFIRMED')",
+                registrationId, reservationId, buyerId);
+        UUID ticketId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO tickets (id, registration_id, ticket_type_id, code, status, checked_in_at)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                ticketId, registrationId, ticketTypeId, code, status,
+                checkedInAt == null ? null : Timestamp.from(checkedInAt));
+        return ticketId;
     }
 
     /** Xóa mọi row liên quan tới event (kể cả chain reservations đã confirm + outbox). */

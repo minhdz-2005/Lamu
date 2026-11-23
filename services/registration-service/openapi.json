@@ -1,0 +1,896 @@
+{
+  "components": {
+    "schemas": {
+      "AvailabilityView": {
+        "properties": {
+          "available": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "capacity": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          },
+          "reserved": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "salesEnd": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "salesOpen": {
+            "type": "boolean"
+          },
+          "salesStart": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sold": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ticketTypeId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BoardItem": {
+        "properties": {
+          "checkedInAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ticketId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticketTypeName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BoardPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoardItem"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CheckInRequest": {
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CheckInView": {
+        "properties": {
+          "checkedInAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "eventTitle": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ticketId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticketTypeName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateReservationRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateTicketTypeRequest": {
+        "properties": {
+          "capacity": {
+            "format": "int32",
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "currency": {
+            "minLength": 1,
+            "pattern": "^VND$",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 0,
+            "type": "string"
+          },
+          "price": {
+            "minLength": 1,
+            "pattern": "^\\d{1,10}(\\.\\d{1,2})?$",
+            "type": "string"
+          },
+          "salesEnd": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "salesStart": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capacity",
+          "salesEnd",
+          "salesStart"
+        ],
+        "type": "object"
+      },
+      "CreateTicketTypeResponse": {
+        "properties": {
+          "ticketTypeId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FreeResponse": {
+        "properties": {
+          "registrationId": {
+            "type": "string"
+          },
+          "tickets": {
+            "items": {
+              "$ref": "#/components/schemas/IssuedTicket"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IssuedTicket": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          },
+          "ticketTypeName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Item": {
+        "properties": {
+          "quantity": {
+            "format": "int32",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ticketTypeId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "ItemView": {
+        "properties": {
+          "quantity": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ticketTypeId": {
+            "type": "string"
+          },
+          "ticketTypeName": {
+            "type": "string"
+          },
+          "unitPrice": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MyTicketView": {
+        "properties": {
+          "checkedInAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "eventSlug": {
+            "type": "string"
+          },
+          "eventStartsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventStatus": {
+            "type": "string"
+          },
+          "eventTitle": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ticketId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticketTypeName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PatchTicketTypeRequest": {
+        "properties": {
+          "capacity": {
+            "format": "int32",
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "price": {
+            "pattern": "^\\d{1,10}(\\.\\d{1,2})?$",
+            "type": "string"
+          },
+          "salesEnd": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "salesStart": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "pattern": "^(ACTIVE|CLOSED)$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReservationView": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemView"
+            },
+            "type": "array"
+          },
+          "paymentStatus": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TicketTypeView": {
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          },
+          "salesEnd": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "salesStart": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "B\u1ea3n m\u00e1y \u0111\u1ecdc \u0111\u01b0\u1ee3c cho contract freeze. Ngu\u1ed3n s\u1ef1 th\u1eadt v\u1eabn l\u00e0 docs/api/catalog.md; openapi.json trong th\u01b0 m\u1ee5c service l\u00e0 output sinh t\u1ef1 \u0111\u1ed9ng, l\u1ec7ch l\u00e0 test fail.",
+    "title": "Luma Registration & Ticketing Service",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/events/{eventId}/availability": {
+      "get": {
+        "operationId": "availability",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AvailabilityView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-type-controller"
+        ]
+      }
+    },
+    "/events/{eventId}/reservations": {
+      "post": {
+        "operationId": "create_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Email",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "reservation-controller"
+        ]
+      }
+    },
+    "/events/{eventId}/ticket-types": {
+      "get": {
+        "operationId": "list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TicketTypeView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-type-controller"
+        ]
+      },
+      "post": {
+        "operationId": "create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTicketTypeResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-type-controller"
+        ]
+      }
+    },
+    "/events/{eventId}/tickets": {
+      "get": {
+        "operationId": "eventTickets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardPage"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-controller"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "health-controller"
+        ]
+      }
+    },
+    "/reservations/{reservationId}": {
+      "delete": {
+        "operationId": "delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "reservation-controller"
+        ]
+      },
+      "get": {
+        "operationId": "get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationView"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "reservation-controller"
+        ]
+      }
+    },
+    "/reservations/{reservationId}/confirm": {
+      "post": {
+        "operationId": "confirm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreeResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "reservation-controller"
+        ]
+      }
+    },
+    "/ticket-types/{ticketTypeId}": {
+      "patch": {
+        "operationId": "patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticketTypeId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTicketTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-type-controller"
+        ]
+      }
+    },
+    "/tickets/check-in": {
+      "post": {
+        "operationId": "checkIn",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInView"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-controller"
+        ]
+      }
+    },
+    "/users/me/tickets": {
+      "get": {
+        "operationId": "myTickets",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MyTicketView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "ticket-controller"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Generated server url",
+      "url": "http://localhost:8080"
+    }
+  ]
+}

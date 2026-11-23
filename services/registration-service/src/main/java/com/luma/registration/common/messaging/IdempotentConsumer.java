@@ -64,8 +64,12 @@ public class IdempotentConsumer {
         }
         UUID messageId = envelope.eventId();
         String previousRequestId = MDC.get(RequestIdFilter.MDC_KEY);
+        String previousCausation = MDC.get(TraceHeaders.CAUSATION_ID);
         MDC.put(RequestIdFilter.MDC_KEY,
                 envelope.correlationId() == null ? messageId.toString() : envelope.correlationId());
+        // Causation theo messaging §5: mọi event handler này sinh ra sẽ ghi `event_id` của message
+        // hiện tại, ops đọc header là lần ra chuỗi saga ngược về request gốc.
+        MDC.put(TraceHeaders.CAUSATION_ID, messageId.toString());
         try {
             for (int attempt = 0; ; attempt++) {
                 try {
@@ -108,6 +112,11 @@ public class IdempotentConsumer {
                 MDC.remove(RequestIdFilter.MDC_KEY);
             } else {
                 MDC.put(RequestIdFilter.MDC_KEY, previousRequestId);
+            }
+            if (previousCausation == null) {
+                MDC.remove(TraceHeaders.CAUSATION_ID);
+            } else {
+                MDC.put(TraceHeaders.CAUSATION_ID, previousCausation);
             }
         }
     }

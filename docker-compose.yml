@@ -82,6 +82,27 @@ services:
 # This repository currently contains architecture/docs scaffolding, not runnable
 # application images. Add gateway and service build targets here as their
 # Dockerfiles and implementations are created. Keep their ports internal.
+  registration-service:
+    build:
+      context: ./services/registration-service
+    environment:
+      DB_HOST: registration-db
+      DB_PORT: 5432
+      DB_NAME: registration_db
+      POSTGRES_USER: ${POSTGRES_USER:-lumasoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-luma}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-local_dev_only}
+    depends_on:
+      registration-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [backend]
+
 networks:
   backend:
     driver: bridge
