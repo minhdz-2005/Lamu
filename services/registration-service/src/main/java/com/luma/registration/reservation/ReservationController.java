@@ -3,6 +3,8 @@ package com.luma.registration.reservation;
 import com.luma.registration.common.web.ApiException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -41,5 +44,17 @@ public class ReservationController {
                 .toList();
         return service.reserve(new ReservationService.Command(
                 userId, recipientEmail, eventId, items, idempotencyKey));
+    }
+
+    @GetMapping("/reservations/{reservationId}")
+    public ReservationService.ReservationView get(@PathVariable UUID reservationId,
+                                                  @RequestHeader("X-User-Id") String userId) {
+        return service.get(reservationId, userId);
+    }
+
+    @DeleteMapping("/reservations/{reservationId}")
+    public Map<String, String> delete(@PathVariable UUID reservationId,
+                                      @RequestHeader("X-User-Id") String userId) {
+        return service.release(reservationId, userId);
     }
 }

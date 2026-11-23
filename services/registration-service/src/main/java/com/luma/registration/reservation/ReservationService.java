@@ -345,4 +345,100 @@ public class ReservationService {
         }
         return result;
     }
+
+    public record ItemView(String ticketTypeId, String ticketTypeName, int quantity, String unitPrice) {
+    }
+
+    public record ReservationView(String status, OffsetDateTime expiresAt, List<ItemView> items,
+                                  String totalAmount, String paymentStatus) {
+    }
+
+    /** GET /reservations/{id} — self-only (catalog §3). */
+    public ReservationView get(UUID reservationId, String userId) {
+        List<ExistingReservation> found = jdbc.query(
+                "SELECT id, event_id, user_id, status, expires_at FROM reservations WHERE id = ?",
+                (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
+                        rs.getString("user_id"), rs.getString("status"),
+                        rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()),
+                reservationId);
+        if (found.isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+        }
+        ExistingReservation reservation = found.getFirst();
+        if (!reservation.userId().equals(userId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Tài khoản không được phép thực hiện yêu cầu này.");
+        }
+        List<ItemView> items = jdbc.query("""
+                SELECT ri.ticket_type_id, t.name, ri.quantity, ri.unit_price::text AS unit_price
+                FROM reservation_items ri JOIN ticket_types t ON t.id = ri.ticket_type_id
+                WHERE ri.reservation_id = ? ORDER BY ri.id""",
+                (rs, n) -> new ItemView(rs.getString("ticket_type_id"), rs.getString("name"),
+                        rs.getInt("quantity"), rs.getString("unit_price")),
+                reservationId);
+        BigDecimal total = BigDecimal.ZERO;
+        for (ItemView item : items) {
+            total = total.add(new BigDecimal(item.unitPrice()).multiply(BigDecimal.valueOf(item.quantity())));
+        }
+        String paymentStatus = jdbc.queryForObject("SELECT payment_status FROM reservations WHERE id = ?",
+                String.class, reservationId);
+        return new ReservationView(reservation.status(),
+                reservation.expiresAt() == null ? null : OffsetDateTime.ofInstant(reservation.expiresAt(), ZoneOffset.UTC),
+                items, decimal(total), paymentStatus);
+    }
+
+    /**
+     * DELETE /reservations/{id} — chỉ HELD mới hủy được (BR-TCK-05). Nhả `reserved` về đúng số đã giữ
+     * và ghi outbox `ReservationReleased(reason=CANCELLED)` cùng transaction; repeat DELETE rơi vào
+     * nhánh "không còn HELD" → 409, số dư không đổi lần hai.
+     */
+    public Map<String, String> release(UUID reservationId, String userId) {
+        return tx.execute(status -> {
+            List<ExistingReservation> found = jdbc.query(
+                    "SELECT id, event_id, user_id, status, expires_at FROM reservations WHERE id = ? FOR UPDATE",
+                    (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
+                            rs.getString("user_id"), rs.getString("status"),
+                            rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()),
+                    reservationId);
+            if (found.isEmpty()) {
+                throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+            }
+            ExistingReservation reservation = found.getFirst();
+            if (!reservation.userId().equals(userId)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                        "Tài khoản không được phép thực hiện yêu cầu này.");
+            }
+            if (!"HELD".equals(reservation.status())) {
+                throw new ApiException(HttpStatus.CONFLICT, "CONFLICT",
+                        "Reservation không còn ở trạng thái HELD để hủy.");
+            }
+            List<ItemInput> items = jdbc.query(
+                    "SELECT ticket_type_id, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY ticket_type_id",
+                    (rs, n) -> new ItemInput(rs.getString("ticket_type_id"), rs.getInt("quantity")),
+                    reservationId);
+            // Cùng thứ tự lock (inventory trước, theo id) như nhánh giữ chỗ để tránh deadlock.
+            lockTypes(items.stream().map(i -> UUID.fromString(i.ticketTypeId())).toList());
+            for (ItemInput item : items) {
+                jdbc.update("""
+                        UPDATE inventory SET reserved = reserved - ?, version = version + 1, updated_at = now()
+                        WHERE ticket_type_id = ?""",
+                        item.quantity(), UUID.fromString(item.ticketTypeId()));
+            }
+            jdbc.update("UPDATE reservations SET status = 'RELEASED' WHERE id = ?", reservationId);
+            List<Snapshot> snapshots = jdbc.query(
+                    "SELECT organization_id, title, status, starts_at FROM event_snapshot WHERE event_id = ?",
+                    (rs, n) -> new Snapshot((UUID) rs.getObject("organization_id"), rs.getString("title"),
+                            rs.getString("status"), rs.getTimestamp("starts_at").toInstant()),
+                    reservation.eventId());
+            Snapshot snapshot = snapshots.getFirst();
+            outbox.enqueue(reservationId, "ReservationReleased", map(
+                    "reservation_id", reservationId.toString(),
+                    "event_id", reservation.eventId().toString(),
+                    "recipient_email", jdbc.queryForObject(
+                            "SELECT recipient_email FROM reservations WHERE id = ?", String.class, reservationId),
+                    "event_title", snapshot.title(),
+                    "event_starts_at", rfc3339(snapshot.startsAt()),
+                    "reason", "CANCELLED"));
+            return Map.of("status", "RELEASED");
+        });
+    }
 }

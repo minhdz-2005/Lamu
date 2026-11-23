@@ -2,6 +2,8 @@ package com.luma.registration.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.luma.registration.common.web.RequestIdFilter;
+import org.slf4j.MDC;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +29,9 @@ public class OutboxWriter {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Không serialize được outbox payload " + eventType, e);
         }
-        jdbc.update("INSERT INTO outbox_events (aggregate_id, event_type, payload) VALUES (?, ?, ?::jsonb)",
-                aggregateId, eventType, json);
+        jdbc.update("""
+                INSERT INTO outbox_events (aggregate_id, event_type, payload, request_id)
+                VALUES (?, ?, ?::jsonb, ?)""",
+                aggregateId, eventType, json, MDC.get(RequestIdFilter.MDC_KEY));
     }
 }
