@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Cần RabbitMQ dev đang chạy (compose file gốc, cổng 5672). Scheduling tắt trong context này
  * qua poll-ms 1 giờ — test gọi thẳng worker.publishPending().
  */
-@SpringBootTest(properties = "app.outbox.poll-ms=3600000")
+@SpringBootTest
 class OutboxWorkerTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();

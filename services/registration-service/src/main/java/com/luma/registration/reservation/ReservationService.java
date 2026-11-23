@@ -184,9 +184,18 @@ public class ReservationService {
     /** Nhánh miễn phí (quyết định 2, BR-INV-07): registration + vé + outbox trong cùng transaction giữ chỗ. */
     private FreeResponse confirmFree(UUID reservationId, Command cmd, List<LockedType> types,
                                      List<Integer> quantities, BigDecimal total, Snapshot snapshot) {
+        Issued issued = issueTickets(reservationId, UUID.fromString(cmd.userId()), types, quantities);
+        return enqueueConfirmation(reservationId, cmd.eventId(), cmd.recipientEmail(), snapshot, total, issued);
+    }
+
+    private record Issued(UUID registrationId, List<IssuedTicket> tickets) {
+    }
+
+    /** registration + một vé cho từng suất trong giỏ, dùng cho cả nhánh miễn phí lẫn confirm qua saga. */
+    private Issued issueTickets(UUID reservationId, UUID userId, List<LockedType> types, List<Integer> quantities) {
         UUID registrationId = UUID.randomUUID();
         jdbc.update("INSERT INTO registrations (id, reservation_id, user_id, status) VALUES (?, ?, ?, 'CONFIRMED')",
-                registrationId, reservationId, UUID.fromString(cmd.userId()));
+                registrationId, reservationId, userId);
         List<IssuedTicket> tickets = new ArrayList<>();
         for (int i = 0; i < types.size(); i++) {
             for (int q = 0; q < quantities.get(i); q++) {
@@ -195,11 +204,22 @@ public class ReservationService {
                 tickets.add(new IssuedTicket(ticketId.toString(), code, types.get(i).name(), "ISSUED"));
             }
         }
+        return new Issued(registrationId, tickets);
+    }
+
+    /**
+     * Payload của hai event Notification đọc (BR-RSV-06): email lấy từ cột đã lưu, tên sự kiện và
+     * thời điểm bắt đầu lấy từ projection `event_snapshot` — không gọi REST sang Event.
+     */
+    private FreeResponse enqueueConfirmation(UUID reservationId, UUID eventId, String recipientEmail,
+                                             Snapshot snapshot, BigDecimal total, Issued issued) {
+        UUID registrationId = issued.registrationId();
+        List<IssuedTicket> tickets = issued.tickets();
         outbox.enqueue(registrationId, "RegistrationConfirmed", map(
                 "registration_id", registrationId.toString(),
                 "reservation_id", reservationId.toString(),
-                "event_id", cmd.eventId().toString(),
-                "recipient_email", cmd.recipientEmail(),
+                "event_id", eventId.toString(),
+                "recipient_email", recipientEmail,
                 "event_title", snapshot.title(),
                 "event_starts_at", rfc3339(snapshot.startsAt()),
                 "total_amount", decimal(total)));
@@ -208,9 +228,9 @@ public class ReservationService {
                     "ticket_id", ticket.ticketId(),
                     "code", ticket.code(),
                     "registration_id", registrationId.toString(),
-                    "event_id", cmd.eventId().toString(),
+                    "event_id", eventId.toString(),
                     "ticket_type_name", ticket.ticketTypeName(),
-                    "recipient_email", cmd.recipientEmail(),
+                    "recipient_email", recipientEmail,
                     "event_title", snapshot.title(),
                     "event_starts_at", rfc3339(snapshot.startsAt())));
         }
@@ -387,58 +407,187 @@ public class ReservationService {
     }
 
     /**
-     * DELETE /reservations/{id} — chỉ HELD mới hủy được (BR-TCK-05). Nhả `reserved` về đúng số đã giữ
-     * và ghi outbox `ReservationReleased(reason=CANCELLED)` cùng transaction; repeat DELETE rơi vào
-     * nhánh "không còn HELD" → 409, số dư không đổi lần hai.
+     * DELETE /reservations/{id} — chỉ HELD mới hủy được (BR-TCK-05). Repeat DELETE rơi vào nhánh
+     * "không còn HELD" → 409, số dư không đổi lần hai.
      */
     public Map<String, String> release(UUID reservationId, String userId) {
         return tx.execute(status -> {
-            List<ExistingReservation> found = jdbc.query(
-                    "SELECT id, event_id, user_id, status, expires_at FROM reservations WHERE id = ? FOR UPDATE",
-                    (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
-                            rs.getString("user_id"), rs.getString("status"),
-                            rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()),
-                    reservationId);
-            if (found.isEmpty()) {
+            ExistingReservation reservation = lockReservation(reservationId);
+            if (reservation == null) {
                 throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
             }
-            ExistingReservation reservation = found.getFirst();
             if (!reservation.userId().equals(userId)) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
                         "Tài khoản không được phép thực hiện yêu cầu này.");
             }
-            if (!"HELD".equals(reservation.status())) {
-                throw new ApiException(HttpStatus.CONFLICT, "CONFLICT",
-                        "Reservation không còn ở trạng thái HELD để hủy.");
-            }
-            List<ItemInput> items = jdbc.query(
-                    "SELECT ticket_type_id, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY ticket_type_id",
-                    (rs, n) -> new ItemInput(rs.getString("ticket_type_id"), rs.getInt("quantity")),
-                    reservationId);
-            // Cùng thứ tự lock (inventory trước, theo id) như nhánh giữ chỗ để tránh deadlock.
-            lockTypes(items.stream().map(i -> UUID.fromString(i.ticketTypeId())).toList());
-            for (ItemInput item : items) {
-                jdbc.update("""
-                        UPDATE inventory SET reserved = reserved - ?, version = version + 1, updated_at = now()
-                        WHERE ticket_type_id = ?""",
-                        item.quantity(), UUID.fromString(item.ticketTypeId()));
-            }
-            jdbc.update("UPDATE reservations SET status = 'RELEASED' WHERE id = ?", reservationId);
-            List<Snapshot> snapshots = jdbc.query(
-                    "SELECT organization_id, title, status, starts_at FROM event_snapshot WHERE event_id = ?",
-                    (rs, n) -> new Snapshot((UUID) rs.getObject("organization_id"), rs.getString("title"),
-                            rs.getString("status"), rs.getTimestamp("starts_at").toInstant()),
-                    reservation.eventId());
-            Snapshot snapshot = snapshots.getFirst();
-            outbox.enqueue(reservationId, "ReservationReleased", map(
-                    "reservation_id", reservationId.toString(),
-                    "event_id", reservation.eventId().toString(),
-                    "recipient_email", jdbc.queryForObject(
-                            "SELECT recipient_email FROM reservations WHERE id = ?", String.class, reservationId),
-                    "event_title", snapshot.title(),
-                    "event_starts_at", rfc3339(snapshot.startsAt()),
-                    "reason", "CANCELLED"));
+            requireHeld(reservation);
+            releaseLocked(reservation, "CANCELLED", null);
             return Map.of("status", "RELEASED");
         });
+    }
+
+    private static void requireHeld(ExistingReservation reservation) {
+        if (!"HELD".equals(reservation.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFLICT",
+                    "Reservation không còn ở trạng thái HELD để hủy.");
+        }
+    }
+
+    private ExistingReservation lockReservation(UUID reservationId) {
+        List<ExistingReservation> found = jdbc.query(
+                "SELECT id, event_id, user_id, status, expires_at FROM reservations WHERE id = ? FOR UPDATE",
+                (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
+                        rs.getString("user_id"), rs.getString("status"),
+                        rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()),
+                reservationId);
+        return found.isEmpty() ? null : found.getFirst();
+    }
+
+    /**
+     * Phần bù trừ của saga: nhả `reserved` về đúng số đã giữ và ghi `ReservationReleased` cùng transaction.
+     * Caller phải đang ở trong transaction và đã khóa hàng `reservations` (BR-ASY-01).
+     */
+    private void releaseLocked(ExistingReservation reservation, String reason, String paymentStatus) {
+        UUID reservationId = reservation.id();
+        List<ItemInput> items = jdbc.query(
+                "SELECT ticket_type_id, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY ticket_type_id",
+                (rs, n) -> new ItemInput(rs.getString("ticket_type_id"), rs.getInt("quantity")), reservationId);
+        // Cùng thứ tự lock (inventory theo id) như nhánh giữ chỗ để tránh deadlock.
+        lockTypes(items.stream().map(i -> UUID.fromString(i.ticketTypeId())).toList());
+        for (ItemInput item : items) {
+            jdbc.update("""
+                    UPDATE inventory SET reserved = reserved - ?, version = version + 1, updated_at = now()
+                    WHERE ticket_type_id = ?""",
+                    item.quantity(), UUID.fromString(item.ticketTypeId()));
+        }
+        jdbc.update("UPDATE reservations SET status = 'RELEASED', payment_status = COALESCE(?, payment_status) "
+                + "WHERE id = ?", paymentStatus, reservationId);
+        Snapshot snapshot = loadSnapshot(reservation.eventId());
+        outbox.enqueue(reservationId, "ReservationReleased", map(
+                "reservation_id", reservationId.toString(),
+                "event_id", reservation.eventId().toString(),
+                "recipient_email", jdbc.queryForObject(
+                        "SELECT recipient_email FROM reservations WHERE id = ?", String.class, reservationId),
+                "event_title", snapshot.title(),
+                "event_starts_at", rfc3339(snapshot.startsAt()),
+                "reason", reason));
+    }
+
+    /**
+     * 3.5 — worker hết hạn. `FOR UPDATE SKIP LOCKED` để hai tiến trình cùng quét không bao giờ nhả
+     * một chỗ hai lần (BR-RSV-04); chỗ đã bị tiến trình khác khóa thì bỏ qua, lần quét sau còn đó.
+     */
+    public List<String> expireOverdue(int limit) {
+        return tx.execute(status -> {
+            List<ExistingReservation> due = jdbc.query("""
+                    SELECT id, event_id, user_id, status, expires_at FROM reservations
+                    WHERE status = 'HELD' AND expires_at <= now() ORDER BY expires_at LIMIT ?
+                    FOR UPDATE SKIP LOCKED""",
+                    (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
+                            rs.getString("user_id"), rs.getString("status"),
+                            rs.getTimestamp("expires_at").toInstant()),
+                    limit);
+            for (ExistingReservation reservation : due) {
+                releaseLocked(reservation, "EXPIRED", null);
+            }
+            return due.stream().map(r -> r.id().toString()).toList();
+        });
+    }
+
+    /** 3.3 — EventCancelled nhả mọi chỗ HELD của event; trả về số reservation đã nhả. */
+    public int releaseAllHeldForEvent(UUID eventId, String reason) {
+        List<ExistingReservation> held = jdbc.query("""
+                SELECT id, event_id, user_id, status, expires_at FROM reservations
+                WHERE event_id = ? AND status = 'HELD' ORDER BY id FOR UPDATE""",
+                (rs, n) -> new ExistingReservation((UUID) rs.getObject("id"), (UUID) rs.getObject("event_id"),
+                        rs.getString("user_id"), rs.getString("status"),
+                        rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()),
+                eventId);
+        for (ExistingReservation reservation : held) {
+            releaseLocked(reservation, reason, null);
+        }
+        return held.size();
+    }
+
+    public record ConfirmResult(String outcome, FreeResponse issued) {
+    }
+
+    /** Consumer `PaymentFailed`: nhả chỗ và đóng dấu FAILED; trạng thái khác → không có việc gì làm. */
+    public String failPayment(UUID reservationId) {
+        return tx.execute(status -> {
+            ExistingReservation reservation = lockReservation(reservationId);
+            if (reservation == null) {
+                return "NOT_FOUND";
+            }
+            if (!"HELD".equals(reservation.status())) {
+                return "NOTHING_TO_CONFIRM";
+            }
+            releaseLocked(reservation, "PAYMENT_FAILED", "FAILED");
+            return "RELEASED";
+        });
+    }
+
+    /**
+     * Use-case confirm dùng chung cho endpoint nội bộ và consumer `PaymentSucceeded` (BR-RSV-01).
+     * Chỉ reservation còn `HELD` và chưa quá `expires_at` mới đổi `reserved` → `sold`; mọi trạng thái
+     * khác trả outcome để caller tự quyết: REST → 409/403/404, consumer → ack + log request_id
+     * (BR-RSV-02, messaging §9).
+     */
+    public ConfirmResult confirm(UUID reservationId, String userId) {
+        return tx.execute(status -> doConfirm(reservationId, userId));
+    }
+
+    private ConfirmResult doConfirm(UUID reservationId, String userId) {
+        ExistingReservation reservation = lockReservation(reservationId);
+        if (reservation == null) {
+            return new ConfirmResult("NOT_FOUND", null);
+        }
+        if (userId != null && !reservation.userId().equals(userId)) {
+            return new ConfirmResult("FORBIDDEN", null);
+        }
+        boolean expired = reservation.expiresAt() != null && !Instant.now().isBefore(reservation.expiresAt());
+        if (!"HELD".equals(reservation.status()) || expired) {
+            return new ConfirmResult("NOTHING_TO_CONFIRM", null);
+        }
+
+        List<ItemInput> items = jdbc.query(
+                "SELECT ticket_type_id, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY ticket_type_id",
+                (rs, n) -> new ItemInput(rs.getString("ticket_type_id"), rs.getInt("quantity")), reservationId);
+        Map<String, Object> byId = lockTypes(items.stream().map(i -> UUID.fromString(i.ticketTypeId())).toList());
+        List<LockedType> types = new ArrayList<>();
+        List<Integer> quantities = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        for (ItemInput item : items) {
+            LockedType type = (LockedType) byId.get(item.ticketTypeId());
+            types.add(type);
+            quantities.add(item.quantity());
+            total = total.add(type.price().multiply(BigDecimal.valueOf(item.quantity())));
+            jdbc.update("""
+                    UPDATE inventory SET sold = sold + ?, reserved = reserved - ?,
+                                          version = version + 1, updated_at = now()
+                    WHERE ticket_type_id = ?""",
+                    item.quantity(), item.quantity(), type.id());
+        }
+        jdbc.update("UPDATE reservations SET status = 'CONFIRMED', payment_status = 'SUCCEEDED' WHERE id = ?",
+                reservationId);
+        String recipientEmail = jdbc.queryForObject("SELECT recipient_email FROM reservations WHERE id = ?",
+                String.class, reservationId);
+        Issued issued = issueTickets(reservationId, UUID.fromString(reservation.userId()), types, quantities);
+        FreeResponse result = enqueueConfirmation(reservationId, reservation.eventId(), recipientEmail,
+                loadSnapshot(reservation.eventId()), total, issued);
+        return new ConfirmResult("CONFIRMED", result);
+    }
+
+    private Snapshot loadSnapshot(UUID eventId) {
+        List<Snapshot> snapshots = jdbc.query(
+                "SELECT organization_id, title, status, starts_at FROM event_snapshot WHERE event_id = ?",
+                (rs, n) -> new Snapshot((UUID) rs.getObject("organization_id"), rs.getString("title"),
+                        rs.getString("status"), rs.getTimestamp("starts_at").toInstant()),
+                eventId);
+        if (snapshots.isEmpty()) {
+            throw new IllegalStateException("event_snapshot thiếu cho event " + eventId
+                    + " — consumer phải upsert snapshot trước khi nhả chỗ");
+        }
+        return snapshots.getFirst();
     }
 }

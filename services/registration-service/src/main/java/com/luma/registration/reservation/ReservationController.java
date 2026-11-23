@@ -57,4 +57,24 @@ public class ReservationController {
                                       @RequestHeader("X-User-Id") String userId) {
         return service.release(reservationId, userId);
     }
+
+    /**
+     * Endpoint nội bộ cho saga (catalog §3): Gateway không route, UI không có nút xác nhận
+     * (BR-RSV-01) — consumer `PaymentSucceeded` gọi thẳng use-case trong tiến trình. Để lại đây
+     * đúng một đường vận hành/manual, vẫn chặn 403 khi người gọi không phải chủ giữ chỗ.
+     */
+    @PostMapping("/reservations/{reservationId}/confirm")
+    public ReservationService.FreeResponse confirm(@PathVariable UUID reservationId,
+                                                   @RequestHeader("X-User-Id") String userId) {
+        ReservationService.ConfirmResult result = service.confirm(reservationId, userId);
+        return switch (result.outcome()) {
+            case "CONFIRMED" -> result.issued();
+            case "FORBIDDEN" -> throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                    "Tài khoản không được phép thực hiện yêu cầu này.");
+            case "NOT_FOUND" -> throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND",
+                    "Không tìm thấy tài nguyên.");
+            default -> throw new ApiException(HttpStatus.CONFLICT, "CONFLICT",
+                    "Reservation không còn ở trạng thái HELD (đã confirm hoặc đã hết hạn).");
+        };
+    }
 }

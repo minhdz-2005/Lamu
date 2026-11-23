@@ -21,8 +21,10 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 /**
  * Broker chết thì outbox phải còn nguyên: point port AMQP sang cổng không ai nghe, worker chạy
  * một vòng, published_at phải ở lại NULL để lần quét sau phát lại cùng event_id (plan 2.3, BR-ASY-01).
+ * Context riêng vì port khác, nên chỉ override port — hai poll-interval lấy từ application.properties
+ * chung để worker nền của context này không đụng dữ liệu của test khác.
  */
-@SpringBootTest(properties = {"app.outbox.poll-ms=3600000", "spring.rabbitmq.port=59999"})
+@SpringBootTest(properties = "spring.rabbitmq.port=59999")
 class OutboxWorkerBrokerDownTest {
 
     @Autowired
