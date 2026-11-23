@@ -12,6 +12,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -60,6 +61,93 @@ public class TicketTypeService {
                     ticketTypeId, req.capacity());
         });
         return ticketTypeId;
+    }
+
+    private record CurrentRow(int capacity, int sold, int reserved) {
+    }
+
+    /**
+     * 1.4 — sửa loại vé theo từng field; field null giữ nguyên. `capacity` CHỈ được tăng (BR-INV-06):
+     * CHECK `sold + reserved <= capacity` của inventory luôn đúng, nên mọi mức thấp hơn mức hiện tại
+     * tất yếu thấp hơn `sold + reserved` — một nhánh 409 bao cả hai cách diễn đạt của catalog.
+     */
+    public void patch(UUID ticketTypeId, PatchTicketTypeRequest req, String userId) {
+        List<TicketTypeTarget> targets = jdbc.query("""
+                SELECT event_id, sales_start, sales_end FROM ticket_types WHERE id = ?""",
+                (rs, n) -> new TicketTypeTarget((UUID) rs.getObject("event_id"),
+                        utc(rs, "sales_start"), utc(rs, "sales_end")),
+                ticketTypeId);
+        if (targets.isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+        }
+        UUID eventId = targets.getFirst().eventId();
+        List<String> orgIds = jdbc.query(
+                "SELECT organization_id::text FROM event_snapshot WHERE event_id = ?",
+                (rs, n) -> rs.getString(1), eventId);
+        if (orgIds.isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+        }
+        authorization.requireEventPermission(userId, orgIds.getFirst(), eventId.toString(), "event.update");
+
+        // Ghép field mới vào field cũ rồi mới kiểm tra cửa bán: bảng có CHECK sales_end > sales_start.
+        OffsetDateTime salesStart = req.salesStart() != null ? req.salesStart() : targets.getFirst().salesStart();
+        OffsetDateTime salesEnd = req.salesEnd() != null ? req.salesEnd() : targets.getFirst().salesEnd();
+        if (!salesEnd.isAfter(salesStart)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
+                    "sales_end phải sau sales_start.");
+        }
+
+        tx.executeWithoutResult(status -> {
+            List<CurrentRow> current = jdbc.query("""
+                    SELECT t.capacity, i.sold, i.reserved
+                    FROM ticket_types t JOIN inventory i ON i.ticket_type_id = t.id
+                    WHERE t.id = ? FOR UPDATE OF i""",
+                    (rs, n) -> new CurrentRow(rs.getInt("capacity"), rs.getInt("sold"), rs.getInt("reserved")),
+                    ticketTypeId);
+            if (current.isEmpty()) {
+                throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+            }
+            if (req.capacity() != null && req.capacity() < current.getFirst().capacity()) {
+                throw new ApiException(HttpStatus.CONFLICT, "CONFLICT",
+                        "Capacity chỉ được tăng (hiện tại " + current.getFirst().capacity()
+                                + ", đã bán + đang giữ " + (current.getFirst().sold() + current.getFirst().reserved()) + ").");
+            }
+
+            List<String> sets = new ArrayList<>();
+            List<Object> args = new ArrayList<>();
+            if (req.price() != null) {
+                sets.add("price = ?");
+                args.add(new BigDecimal(req.price()));
+            }
+            if (req.status() != null) {
+                sets.add("status = ?");
+                args.add(req.status());
+            }
+            if (req.salesStart() != null) {
+                sets.add("sales_start = ?");
+                args.add(Timestamp.from(req.salesStart().toInstant()));
+            }
+            if (req.salesEnd() != null) {
+                sets.add("sales_end = ?");
+                args.add(Timestamp.from(req.salesEnd().toInstant()));
+            }
+            if (req.capacity() != null) {
+                sets.add("capacity = ?");
+                args.add(req.capacity());
+            }
+            if (!sets.isEmpty()) {
+                args.add(ticketTypeId);
+                jdbc.update("UPDATE ticket_types SET " + String.join(", ", sets) + " WHERE id = ?", args.toArray());
+            }
+            if (req.capacity() != null) {
+                jdbc.update("""
+                        UPDATE inventory SET capacity = ?, version = version + 1, updated_at = now()
+                        WHERE ticket_type_id = ?""", req.capacity(), ticketTypeId);
+            }
+        });
+    }
+
+    private record TicketTypeTarget(UUID eventId, OffsetDateTime salesStart, OffsetDateTime salesEnd) {
     }
 
     public record TicketTypeView(UUID id, String name, String price, String currency, String status,
