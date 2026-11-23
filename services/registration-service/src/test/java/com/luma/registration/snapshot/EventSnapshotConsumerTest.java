@@ -100,27 +100,6 @@ class EventSnapshotConsumerTest {
         return fieldOf(eventId, column);
     }
 
-    /**
-     * Bằng chứng "message trước đã tiêu xong": queue có một consumer và prefetch 1 nên tin được xử lý
-     * theo thứ tự; marker là EventPublished của event khác, hàng của nó xuất hiện nghĩa là message
-     * đứng trước đã ack. Đếm messageCount không đủ vì broker trừ số dư ngay lúc giao tin.
-     */
-    private void awaitProcessedUpToNow() {
-        UUID marker = UUID.randomUUID();
-        created.add(marker);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("event_id", marker.toString());
-        payload.put("organization_id", orgId.toString());
-        payload.put("slug", "marker");
-        payload.put("title", "marker");
-        payload.put("status", "PUBLISHED");
-        payload.put("starts_at", Instant.now().plus(1, ChronoUnit.DAYS).toString());
-        payload.put("ends_at", Instant.now().plus(2, ChronoUnit.DAYS).toString());
-        TestMessages.published(rabbit, TopologyConfig.EVENT_EXCHANGE, "event.published.v1",
-                "EventPublished", marker, payload, "req-marker");
-        Await.until("marker " + marker + " đã được tiêu", () -> "marker".equals(fieldOf(marker, "title")));
-    }
-
     @Test
     void eventPublishedTuBrokerDayDuProjectionVaOrganizationId() {
         assertThat(snapshotField("title")).isNull();
