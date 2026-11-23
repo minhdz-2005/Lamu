@@ -6,6 +6,7 @@
   "workspaces": [
     "gateway",
     "services/identity-service",
+    "services/event-service",
     "shared/libraries/runtime"
   ],
   "engines": {
