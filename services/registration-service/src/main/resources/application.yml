@@ -24,6 +24,9 @@ spring:
 app:
   reservation:
     hold-ttl-seconds: ${RESERVATION_HOLD_TTL_SECONDS:120}
+  identity:
+    base-url: ${IDENTITY_URL:http://identity-service:8080}
+    timeout-ms: ${IDENTITY_TIMEOUT_MS:3000}
 
 logging:
   pattern:
