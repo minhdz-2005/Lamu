@@ -5,6 +5,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY gateway/package.json gateway/package.json
 COPY shared/libraries/runtime/package.json shared/libraries/runtime/package.json
 COPY services/identity-service/package.json services/identity-service/package.json
+COPY services/event-service/package.json services/event-service/package.json
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY shared/libraries/runtime shared/libraries/runtime
 COPY shared/contracts shared/contracts

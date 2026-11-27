@@ -1,0 +1,12 @@
+// Event Service owns event_db only. organization_id / created_by are logical
+// references to Identity, never foreign keys across databases.
+// Models (events, outbox_events) are added in phase 2 with their migration.
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

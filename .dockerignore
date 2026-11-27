@@ -7,5 +7,6 @@
 .git
 frontend
 services/identity-service/src/generated
+services/event-service/src/generated
 services/identity-service/report
 

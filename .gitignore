@@ -9,6 +9,7 @@ next-env.d.ts
 
 # Prisma client được sinh lại bằng npm run db:generate -w @lamu/identity
 /services/identity-service/src/generated/
+/services/event-service/src/generated/
 
 # Biến môi trường — chỉ commit .env.example, secret local không bao giờ vào repo
 .env
